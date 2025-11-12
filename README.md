@@ -19,9 +19,9 @@ The project has just started and is currently under development. This is an init
 
 ---
 
-# FamilieTask App - Database Documentation
+ # FamilieTask App - Database Documentation
 
-This document describes the structure of the database used in the FamilieTask App. The database consists of four tables: `Users`, `Families`, `FamilyMembers`, and `Tasks`.  
+This document describes the structure of the database used in the FamilieTask App. The database tables and columns below are aligned with the current SQLite schema.
 
 ---
 
@@ -35,6 +35,7 @@ Stores information about users.
 | username  | TEXT    | Username, cannot be null                 |
 | email     | TEXT    | User's email, must be unique             |
 | password  | TEXT    | User's password, cannot be null          |
+| points    | INTEGER | Accumulated points for gamification, default: 0 |
 
 ---
 
@@ -46,51 +47,84 @@ Stores information about families.
 |--------|---------|------------------------------------|
 | id     | INTEGER | Primary key, autoincrement         |
 | name   | TEXT    | Name of the family, cannot be null |
+| owner_id | INTEGER | References `Users(id)` — family owner |
+| join_code | TEXT | Unique join code for invitations   |
+| last_code_update | TIMESTAMP | Timestamp of last join_code update |
 
 ---
 
 ## 👨‍👩‍👧‍👦 FamilyMembers Table
 
 Manages which users are members of which families and their roles.
+
 | Column     | Type    | Description                                                              |
 |------------|---------|--------------------------------------------------------------------------|
-| id         | INTEGER | Primary key, autoincrement                                               |
-| family_id  | INTEGER | References Families(id), must exist                                      |
-| user_id    | INTEGER | References Users(id), must exist                                         |
-| role       | TEXT    | Role in the family: `'owner'`, `'admin'` or `'standard'`                 |
+| family_id  | INTEGER | References `Families(id)`                                                 |
+| user_id    | INTEGER | References `Users(id)`                                                   |
+| role       | TEXT    | Role in the family: `'admin'` or `'standard'` (default: `'standard'`)    |
+
+Primary key: composite (`family_id`, `user_id`).
 
 ---
 
 **Notes:**  
-- We could avoid the `FamilyMembers` table and run a one to many relationship between `User`and `Famlily`, but inlucing it ensures scalability and it makes it easier to adapt roles.
-- The `'owner'` role should automatically be assigned to the user who creates the family. Owner Gets the same functionallity as an admin and some extra benefits.
-- `'admin'` can assign tasks and manage members.  
-- `'standard'` represents regular family members.
+- The `owner` of a family is stored on the `Families.owner_id` column; `FamilyMembers` tracks membership and member-level roles (`admin`, `standard`).
+- `admin` can assign tasks and manage members; `standard` represents regular members.
 
 ---
 
 ## ✅ Tasks Table
 
-Stores tasks that are linked to families and users.
+Stores task definitions that belong to a family.
 
-| Column      | Type    | Description                                                |
-|-------------|---------|------------------------------------------------------------|
-| id          | INTEGER | Primary key, autoincrement                                 |
-| family_id   | INTEGER | References Families(id)                                    |
-| assigned_to | INTEGER | References Users(id), can be null if unassigned            |
-| title       | TEXT    | Task title, cannot be null                                 |
-| description | TEXT    | Optional description of the task                           |
-| status      | TEXT    | Task status, default: `'pending'`                          |
-| due_date    | TEXT    | Task due date (optional)                                   |
-| created     | TEXT    | Creation timestamp, default: CURRENT_TIMESTAMP             |
+| Column        | Type    | Description                                               |
+|---------------|---------|-----------------------------------------------------------|
+| id            | INTEGER | Primary key, autoincrement                                |
+| family_id     | INTEGER | References `Families(id)`                                 |
+| title         | TEXT    | Task title, cannot be null                                |
+| description   | TEXT    | Optional description of the task                          |
+| difficulty    | TEXT    | Difficulty: `light`, `easy`, `medium`, `hard` (default: `medium`) |
+| points_reward | INTEGER | Points awarded for completing the task (default: 10)      |
+| created_by    | INTEGER | References `Users(id)` — who created the task (NOT NULL)  |
+| created       | TIMESTAMP | Creation timestamp, default: CURRENT_TIMESTAMP         |
+| deadline      | TIMESTAMP | Optional deadline                                      |
+
+---
+
+## 📝 AssignedTasks Table
+
+Tracks assignment of tasks to users and the assignment lifecycle.
+
+| Column        | Type    | Description                                                      |
+|---------------|---------|------------------------------------------------------------------|
+| id            | INTEGER | Primary key, autoincrement                                       |
+| task_id       | INTEGER | References `Tasks(id)`                                           |
+| user_id       | INTEGER | References `Users(id)` — may be NULL if unassigned              |
+| status        | TEXT    | `not_assigned`, `pending`, `completed`, `approved` (default: `not_assigned`) |
+| assigned_date | TIMESTAMP | Timestamp when assignment created (default: CURRENT_TIMESTAMP) |
+
+---
+
+## 🔔 JoinRequests Table
+
+Tracks requests from users to join a family (used for approval flows).
+
+| Column      | Type    | Description                                              |
+|-------------|---------|----------------------------------------------------------|
+| id          | INTEGER | Primary key, autoincrement                               |
+| family_id   | INTEGER | References `Families(id)`                                |
+| user_id     | INTEGER | References `Users(id)`                                  |
+| status      | TEXT    | `pending`, `approved`, `rejected` (default: `pending`)  |
+| requested_at| TIMESTAMP | When the request was made (default: CURRENT_TIMESTAMP) |
+| expires_at  | TIMESTAMP | When the request expires (default: now + 7 days)       |
 
 ---
 
 ## 🔗 Relationships
 
 - A `User` can be a member of multiple `Families` through `FamilyMembers`.
-- A `Family` can have multiple members with different roles.  
-- A `Task` always belongs to a `Family` and can be assigned to a `User`.  
-- `FamilyMembers.role` controls access and permissions within the family.
+- A `Family` can have multiple members with different roles.
+- A `Task` belongs to a `Family`; assignments for tasks are stored in `AssignedTasks`.
+- `JoinRequests` supports an approval/expiry flow to join a family.
 
 ---
