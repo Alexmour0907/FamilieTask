@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Login FamilieTask</title>
+    <link rel="icon" href="/images/Logo.png" type="image/x-icon">
+    <script src="/js/login.js" defer></script>
 </head>
 <body>
     <h1>Welcome to FamilieTask</h1>
-    <form id="loginForm">
-        <input type="text" placeholder="Username" name="username">
+    <form id="loginForm" onsubmit="loginUser(event)">
+        <input type="email" placeholder="Email" name="email">
         <input type="password" placeholder="Password" name="password">
         <button type="submit">Login</button>
     </form>

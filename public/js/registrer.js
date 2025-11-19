@@ -15,8 +15,10 @@ async function registerUser(event) {
 
     if (response.ok) {
         alert('Registration successful! You can now log in.');
+        console.log('Registered successfully');
         window.location.href = '/index.html'; // Redirect til login
     } else {
         alert(`Registration failed: ${result.message}`);
+        console.error('Registration error:', result.message);
     }
 }
