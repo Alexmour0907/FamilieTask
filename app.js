@@ -176,3 +176,58 @@ app.post('/createFamily', requireLogin, (req, res) => {
         res.status(500).json({ message: 'Internal server error during family creation.' });
     }
 });
+
+// Join Family Route
+app.post('/join-request', requireLogin, (req, res) => {
+    const { joinCode } = req.body;
+    const userId = req.session.user.id;
+
+    if (!joinCode || joinCode.trim().length === 0) {
+        return res.status(400).json({ message: 'Join code is required.' });
+    }
+
+    try {
+        // Finn familie basert på join-koden
+        const familyStmt = db.prepare('SELECT id FROM Families WHERE join_code = ?');
+        const family = familyStmt.get(joinCode.trim().toUpperCase());
+
+        // Hvis det ikke er en familie med den join-koden send 404 error
+        if (!family) {
+            return res.status(404).json({ message: 'Invalid join code.' });
+        }
+
+        const familyId = family.id;
+
+        // Sjekk om brukeren allerede er medlem av familien
+        const memberSql = 'SELECT 1 FROM FamilyMembers WHERE family_id = ? AND user_id = ?';
+        const memberStmt = db.prepare(memberSql).get(familyId, userId);
+
+        if (memberStmt) {
+            return res.status(409).json({ message: 'You are already a member of this family.' });
+        }
+
+        // Sjekk om det allerede finnes en ventende forespørsel
+        const requestSql = `SELECT 1 FROM JoinRequests WHERE family_id = ? AND user_id = ? AND status = 'pending'`;
+        const existingRequest = db.prepare(requestSql).get(familyId, userId);
+
+        if (existingRequest) {
+            return res.status(409).json({ message: 'You already have a pending join request for this family.' });
+        }
+
+        const insertSql = `
+            INSERT INTO JoinRequests (family_id, user_id, status, expires_at) 
+            VALUES (?, ?, 'pending', DATETIME('now', '+7 days'))
+        `;
+        db.prepare(insertSql).run(familyId, userId);
+
+        // Send a final success message to the user
+        res.status(200).json({ 
+            success: true,
+            message: 'Join request sent successfully! The family owner has been notified.' 
+        });
+
+    } catch (error) {
+        console.error('Join request error:', error);
+        res.status(500).json({ message: 'Server error while processing join request.' });
+    }
+});
