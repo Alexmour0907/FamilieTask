@@ -1,27 +1,262 @@
-# FamilieTask
+# FamilieTask 🧩
 
 FamilieTask is an app designed to make it easy to create and share tasks among family members. The goal is to help families keep track of who is responsible for what, and when tasks need to be done.
 
-## Status
-The project has just started and is currently under development. This is an initial plan for how the app will be built and what features it will include.
+## Project Status 📌
 
-## Planned Features
-- Create an account and set up a family/group
-- Add family members to the group
-- Assign and track tasks
-- Roles: Admin and Standard user
-- Overview of completed and ongoing tasks
+The project is in active development. Some key features have been implemented, providing a solid foundation for the application.
 
-## Technology (Planned)
-- Backend: Node.js with Express
-- Database: SQLite
-- Frontend: HTML and CSS communicating with the backend via API
+### Implemented Features:  ✔️
+- **User Registration:** New users can create an account.
+- **User Login:** Registered users can log in, and a session is created for them.
+- **Family Creation:** Logged-in users without a family are prompted to create one.
+- **Join Family:** Users can request to join an existing family using a unique join code.
+- **Admin Panel Placeholder:** A basic admin panel is accessible to users with admin rights, laying the groundwork for future administrative features.
+
+### Next Steps 🚀
+The immediate next step is to implement the functionality for family owners and administrators to **accept or reject incoming join requests**. This will make the family-joining process fully functional.
+
+## ✨ Planned Features
+- **Complete Family Management:** Implement the full workflow for adding, managing, and removing family members.
+- **Full Task Lifecycle:** Allow users to create, assign, track progress, and review completed tasks.
+- **Expanded Role Permissions:** Solidify the distinct permissions for `owner`, `admin`, and `standard` user roles.
+- **Gamification System:** Build out the logic for awarding, tracking, and displaying points for task completion.
+- **Notifications:** Alert users to important events like new task assignments or pending join requests.
+
+## 💻 Technology Stack
+- **Backend:** Node.js with Express
+- **Database:** SQLite, accessed via the `better-sqlite3` library.
+- **Frontend:** HTML, CSS, and Vanilla JavaScript utilizing the `fetch` API.
+- **Authentication:** Passwords are hashed using `bcrypt`, and sessions are managed with `express-session` and `session-file-store`.
+
+## ⚙️ How the Project Works 🛠️
+
+The application is built with a Node.js and Express backend, a SQLite database, and a frontend using HTML, CSS, and vanilla JavaScript.
+
+### Backend (app.js) ⚙️
+
+The main server file `app.js` handles routing, middleware, and database interactions.
+
+#### 1. User Registration (`/register`) 📝
+This endpoint handles new user creation. It checks if the user already exists, hashes the password using `bcrypt`, and stores the new user in the `Users` table.
+
+```javascript
+// Registration route
+app.post('/register', async (req, res) => {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+        return res.status(400).json({ message: 'Please provide all required fields.' });
+    }
+
+    try {
+        // Check if user already exists
+        const stmt_find = db.prepare('SELECT * FROM users WHERE email = ?');
+        const existingUser = stmt_find.get(email);
+
+        if (existingUser) {
+            return res.status(409).json({ message: 'User with this email already exists.' });
+        }
+
+        // Hash the password
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // Insert new user into the database
+        const stmt_insert = db.prepare('INSERT INTO users (username, email, password) VALUES (?, ?, ?)');
+        stmt_insert.run(username, email, hashedPassword);
+
+        res.status(201).json({ message: 'User registered successfully!' });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+```
+
+#### 2. User Login (`/login`) 🔐
+Handles user authentication. It verifies credentials and, upon success, creates a session. It also checks if the user is part of a family and redirects them accordingly (`/dashboard.html` or `/createNewFamily.html`).
+
+```javascript
+// Login route
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required.' });
+    }
+
+    try {
+        const userStmt = db.prepare('SELECT * FROM Users WHERE email = ?');
+        const user = userStmt.get(email);
+
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials.' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid credentials.' });
+        }
+
+        req.session.user = {
+            id: user.id,
+            username: user.username,
+            email: user.email
+        };
+
+        // Sjekk familie medlemskap
+        const familyStmt = db.prepare('SELECT family_id FROM FamilyMembers WHERE user_id = ?');
+        const familyMembership = familyStmt.get(user.id);
+
+        // Velg redirect URL basert på familie medlemskap
+        const redirectUrl = familyMembership ? '/dashboard.html' : '/createNewFamily.html';
+
+        res.status(200).json({ message: 'Login successful!', redirectUrl });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+```
+
+#### 3. Family Creation (`/createFamily`) 🏠
+Allows a logged-in user to create a new family. It generates a unique, random join code for the family.
+
+```javascript
+// Create Family Route 
+app.post('/createFamily', requireLogin, (req, res) => {
+    const { familyName } = req.body;
+    const userId = req.session.user.id;
+
+    // 1. Validate family name
+    const trimmedName = familyName ? familyName.trim() : '';
+    if (trimmedName.length < 2 || trimmedName.length > 50) {
+        return res.status(400).json({ message: 'Family name must be between 2 and 50 characters.' });
+    }
+
+    try {
+        // 2. Generer en unik join-kode
+        let joinCode;
+        let isUnique = false;
+        const findCodeStmt = db.prepare('SELECT id FROM Families WHERE join_code = ?');
+        while (!isUnique) {
+            joinCode = crypto.randomBytes(6).toString('hex').toUpperCase(); // 12-char code
+            const existingFamily = findCodeStmt.get(joinCode);
+            if (!existingFamily) {
+                isUnique = true;
+            }
+        }
+
+        // 3. Bruke transaksjon for å opprette familie og legge til eier som medlem
+        const createFamilyTx = db.transaction(() => {
+            const insertFamilyStmt = db.prepare(
+                'INSERT INTO Families (name, owner_id, join_code, last_code_update) VALUES (?, ?, ?, ?)'
+            );
+            const info = insertFamilyStmt.run(trimmedName, userId, joinCode, new Date().toISOString());
+            const familyId = info.lastInsertRowid;
+
+            const insertMemberStmt = db.prepare(
+                'INSERT INTO FamilyMembers (family_id, user_id, role) VALUES (?, ?, ?)'
+            );
+            insertMemberStmt.run(familyId, userId, 'owner');
+        });
+
+        createFamilyTx();
+
+        // 4. Svar til klienten
+        res.status(201).json({ message: 'Family created successfully!', redirectUrl: '/dashboard.html' });
+
+    } catch (error) {
+        console.error('Family creation error:', error);
+        res.status(500).json({ message: 'Internal server error during family creation.' });
+    }
+});
+```
+
+#### 4. Join Family Request (`/join-request`) ➕
+Allows a logged-in user to send a request to join a family using its join code. The request is stored in the `JoinRequests` table with a `pending` status.
+
+```javascript
+// Join Family Route
+app.post('/join-request', requireLogin, (req, res) => {
+    const { joinCode } = req.body;
+    const userId = req.session.user.id;
+
+    if (!joinCode || joinCode.trim().length === 0) {
+        return res.status(400).json({ message: 'Join code is required.' });
+    }
+
+    try {
+        // Finn familie basert på join-koden
+        const familyStmt = db.prepare('SELECT id FROM Families WHERE join_code = ?');
+        const family = familyStmt.get(joinCode.trim().toUpperCase());
+
+        // Hvis det ikke er en familie med den join-koden send 404 error
+        if (!family) {
+            return res.status(404).json({ message: 'Invalid join code.' });
+        }
+
+        const familyId = family.id;
+
+        // Sjekk om brukeren allerede er medlem av familien
+        const memberSql = 'SELECT 1 FROM FamilyMembers WHERE family_id = ? AND user_id = ?';
+        const memberStmt = db.prepare(memberSql).get(familyId, userId);
+
+        if (memberStmt) {
+            return res.status(409).json({ message: 'You are already a member of this family.' });
+        }
+
+        // Sjekk om det allerede finnes en ventende forespørsel
+        const requestSql = `SELECT 1 FROM JoinRequests WHERE family_id = ? AND user_id = ? AND status = 'pending'`;
+        const existingRequest = db.prepare(requestSql).get(familyId, userId);
+
+        if (existingRequest) {
+            return res.status(409).json({ message: 'You already have a pending join request for this family.' });
+        }
+
+        const insertSql = `
+            INSERT INTO JoinRequests (family_id, user_id, status, expires_at) 
+            VALUES (?, ?, 'pending', DATETIME('now', '+7 days'))
+        `;
+        db.prepare(insertSql).run(familyId, userId);
+
+        // Sender suksessrespons
+        res.status(200).json({ 
+            success: true,
+            message: 'Join request sent successfully! The family owner has been notified.' 
+        });
+
+    } catch (error) {
+        console.error('Join request error:', error);
+        res.status(500).json({ message: 'Server error while processing join request.' });
+    }
+});
+```
+
+### API Endpoints 🌐
+The application also exposes API endpoints to provide data to the frontend dynamically.
+- **`GET /api/join-requests`**: Fetches pending join requests for family admins.
+- **`GET /api/user/permissions`**: Checks if the current user has admin rights to determine whether to show admin-only UI elements.
+
+
+---
+ # FamilieTask App - Database Documentation 🗄️
+
+This part of the document describes the structure of the database used in the FamilieTask App. The database tables and columns below are aligned with the current SQLite schema.
 
 ---
 
- # FamilieTask App - Database Documentation
+### Database Visual Diagram 🧭
+This diagram illustrates the relationships between the tables in the `FamilieTask_database.db` SQLite database.
 
-This document describes the structure of the database used in the FamilieTask App. The database tables and columns below are aligned with the current SQLite schema.
+![Database Diagram](./docs/database-diagram.png)
+
+You can view and edit the diagram here: [DrawDB Link](https://www.drawdb.app/editor?shareId=4c93190b4986266e6fac4d060955f1f9)
+
 
 ---
 
@@ -122,9 +357,28 @@ Tracks requests from users to join a family (used for approval flows).
 
 ## 🔗 Relationships
 
-- A `User` can be a member of multiple `Families` through `FamilyMembers`.
-- A `Family` can have multiple members with different roles.
-- A `Task` belongs to a `Family`; assignments for tasks are stored in `AssignedTasks`.
-- `JoinRequests` supports an approval/expiry flow to join a family.
+The database schema is designed with the following relationships, enforced by foreign keys:
 
+- **`Families` -> `Users`**:
+  - `Families.owner_id` references `Users.id` to designate the family's owner.
+
+- **`FamilyMembers` -> `Users` & `Families`**:
+  - `FamilyMembers.user_id` references `Users.id`.
+  - `FamilyMembers.family_id` references `Families.id`.
+  - This table acts as a junction table to resolve the many-to-many relationship between `Users` and `Families`. While a simpler design might have avoided this table (e.g., if a user could only belong to one family), this approach provides excellent scalability, allowing a user to be a member of multiple families seamlessly.
+
+- **`Tasks` -> `Families` & `Users`**:
+  - `Tasks.family_id` references `Families.id` to associate a task with a family.
+  - `Tasks.created_by` references `Users.id` to indicate who created the task.
+
+- **`AssignedTasks` -> `Tasks` & `Users`**:
+  - `AssignedTasks.task_id` references `Tasks.id`.
+  - `AssignedTasks.user_id` references `Users.id`, linking a user to a specific task assignment.
+
+- **`JoinRequests` -> `Users` & `Families`**:
+  - `JoinRequests.user_id` references `Users.id`.
+  - `JoinRequests.family_id` references `Families.id`.
+  - This table manages pending requests from users who want to join a family.
 ---
+
+
