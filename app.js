@@ -47,9 +47,13 @@ const requireLogin = (req, res, next) => {
     next();
 };
 
-//Ruter
+//Hoved Ruter
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
+});
+
+app.get('/admin', requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'user-adminpanel.html'));
 });
 
 // Registration route
@@ -220,7 +224,7 @@ app.post('/join-request', requireLogin, (req, res) => {
         `;
         db.prepare(insertSql).run(familyId, userId);
 
-        // Send a final success message to the user
+        // Sender suksessrespons
         res.status(200).json({ 
             success: true,
             message: 'Join request sent successfully! The family owner has been notified.' 
@@ -229,5 +233,58 @@ app.post('/join-request', requireLogin, (req, res) => {
     } catch (error) {
         console.error('Join request error:', error);
         res.status(500).json({ message: 'Server error while processing join request.' });
+    }
+});
+
+
+// Få påvente av join-forespørsler (for familieeier og administratorer)
+app.get('/api/join-requests', requireLogin, (req, res) => {
+    const currentUserId = req.session.user.id;
+
+    try {
+        const sql = `
+            SELECT 
+                jr.id AS requestId,
+                u.username AS requesterUsername,
+                u.email AS requesterEmail,
+                f.name AS familyName,
+                jr.status,
+                jr.requested_at,
+                jr.expires_at
+            FROM JoinRequests jr
+            JOIN Users u ON jr.user_id = u.id
+            JOIN Families f ON jr.family_id = f.id
+            WHERE jr.status = 'pending' AND f.id IN (
+                SELECT family_id FROM FamilyMembers 
+                WHERE user_id = ? AND (role = 'owner' OR role = 'admin')
+            )
+            ORDER BY jr.requested_at DESC
+        `;
+
+        const requests = db.prepare(sql).all(currentUserId);
+        res.status(200).json(requests); 
+
+    } catch (error) {
+        console.error('Error fetching join requests:', error);
+        res.status(500).json({ message: 'Server error while fetching join requests.' });
+    }
+});
+
+// Skjekk brukerens admin-rettigheter
+app.get('/api/user/permissions', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    try {
+        const sql = `
+            SELECT 1 FROM FamilyMembers 
+            WHERE user_id = ? AND (role = 'owner' OR role = 'admin')
+            LIMIT 1
+        `;
+        const permission = db.prepare(sql).get(userId);
+        
+        res.status(200).json({ hasAdminRights: !!permission });
+
+    } catch (error) {
+        console.error('Error fetching user permissions:', error);
+        res.status(500).json({ message: 'Server error while fetching permissions.' });
     }
 });
