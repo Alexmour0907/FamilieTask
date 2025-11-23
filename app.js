@@ -237,7 +237,7 @@ app.post('/join-request', requireLogin, (req, res) => {
 });
 
 
-// Få påvente av join-forespørsler (for familieeier og administratorer)
+// Få påventende join-forespørsler (for familieeier og administratorer)
 app.get('/api/join-requests', requireLogin, (req, res) => {
     const currentUserId = req.session.user.id;
 
@@ -286,5 +286,83 @@ app.get('/api/user/permissions', requireLogin, (req, res) => {
     } catch (error) {
         console.error('Error fetching user permissions:', error);
         res.status(500).json({ message: 'Server error while fetching permissions.' });
+    }
+});
+
+// Håndterer join request accept/reject
+app.post('/api/join-requests/:requestId/respond', requireLogin, (req, res) => {
+    const { requestId } = req.params;
+    const { action } = req.body; // 'accept' eller 'reject'
+    const currentUserId = req.session.user.id;
+
+    if (!action || !['accept', 'reject'].includes(action)) {
+        return res.status(400).json({ message: "Invalid action. Must be 'accept' or 'reject'." });
+    }
+
+    try {
+        const transaction = db.transaction((userId, reqId, act) => {
+            const getRequestSql = `
+                SELECT jr.family_id, jr.user_id, jr.status, fm.role
+                FROM JoinRequests jr
+                LEFT JOIN FamilyMembers fm ON jr.family_id = fm.family_id AND fm.user_id = ?
+                WHERE jr.id = ?
+            `;
+            const request = db.prepare(getRequestSql).get(userId, reqId);
+
+            if (!request) {
+                const err = new Error('Join request not found.');
+                err.statusCode = 404;
+                throw err;
+            }
+            if (request.status !== 'pending') {
+                const err = new Error(`Request has already been ${request.status}.`);
+                err.statusCode = 409;
+                throw err;
+            }
+            if (request.role !== 'owner' && request.role !== 'admin') {
+                const err = new Error('You do not have permission to manage this request.');
+                err.statusCode = 403;
+                throw err;
+            }
+
+            if (act === 'accept') {
+                let responseMessage;
+                
+                // Sjekk om brukeren allerede er medlem
+                const memberCheckSql = 'SELECT 1 FROM FamilyMembers WHERE family_id = ? AND user_id = ?';
+                const existingMember = db.prepare(memberCheckSql).get(request.family_id, request.user_id);
+
+                if (existingMember) {
+                    responseMessage = 'User was already a member. Request marked as accepted.';
+                } else {
+                    // Hvis ikke medlem, legg dem til
+                    const insertMemberSql = 'INSERT INTO FamilyMembers (family_id, user_id, role) VALUES (?, ?, ?)';
+                    db.prepare(insertMemberSql).run(request.family_id, request.user_id, 'standard');
+                    responseMessage = 'User has been added to the family.';
+                }
+
+                // Uansett, oppdater forespørselsstatus til 'approved'
+                const updateRequestSql = "UPDATE JoinRequests SET status = 'approved' WHERE id = ?";
+                db.prepare(updateRequestSql).run(reqId);
+                
+                return { message: responseMessage };
+
+            } else { // action === 'reject'
+                const updateRequestSql = "UPDATE JoinRequests SET status = 'rejected' WHERE id = ?";
+                db.prepare(updateRequestSql).run(reqId);
+                return { message: 'Join request has been rejected.' };
+            }
+        });
+
+        const result = transaction(currentUserId, requestId, action);
+        res.status(200).json(result);
+
+    } catch (error) {
+        if (error.statusCode) {
+            res.status(error.statusCode).json({ message: error.message });
+        } else {
+            console.error('Error responding to join request:', error);
+            res.status(500).json({ message: 'Server error while processing the request.' });
+        }
     }
 });

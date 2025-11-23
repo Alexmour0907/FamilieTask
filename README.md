@@ -10,11 +10,13 @@ The project is in active development. Some key features have been implemented, p
 - **User Registration:** New users can create an account.
 - **User Login:** Registered users can log in, and a session is created for them.
 - **Family Creation:** Logged-in users without a family are prompted to create one.
-- **Join Family:** Users can request to join an existing family using a unique join code.
-- **Admin Panel Placeholder:** A basic admin panel is accessible to users with admin rights, laying the groundwork for future administrative features.
+- **Full Join Request Workflow:** A complete system for users to join families is now implemented.
+    - Users can request to join a family using a unique code.
+    - Family `owner`s and `admin`s can view, `accept`, or `reject` these requests from a dedicated admin panel.
+- **Admin Panel Placeholder:** A basic admin panel is accessible to users with admin rights, currently used for managing join requests. Also laying the groundwork for future administrative features.
 
 ### Next Steps 🚀
-The immediate next step is to implement the functionality for family owners and administrators to **accept or reject incoming join requests**. This will make the family-joining process fully functional.
+The next steps for the project are currently undecided. With the core user and family management system now in place, we can explore several feature directions, such as task creation, assignment, and the points-based reward system.
 
 ## ✨ Planned Features
 - **Complete Family Management:** Implement the full workflow for adding, managing, and removing family members.

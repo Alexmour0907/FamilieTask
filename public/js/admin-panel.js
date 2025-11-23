@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const requestsList = document.getElementById('requests-list');
+    const messageContainer = document.getElementById('message-container');
 
     const fetchAndDisplayRequests = async () => {
         try {
@@ -44,6 +45,50 @@ document.addEventListener('DOMContentLoaded', () => {
             requestsList.innerHTML = '<p>Could not load join requests. Please try again later.</p>';
         }
     };
+
+    const handleRequestAction = async (event) => {
+        const target = event.target;
+        const isAccept = target.classList.contains('accept-btn');
+        const isReject = target.classList.contains('reject-btn');
+
+        if (!isAccept && !isReject) {
+            return; // Click was not on a button
+        }
+
+        const requestId = target.dataset.requestId;
+        const action = isAccept ? 'accept' : 'reject';
+
+        try {
+            const response = await fetch(`/api/join-requests/${requestId}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action })
+            });
+
+            const result = await response.json();
+            messageContainer.textContent = result.message;
+            messageContainer.className = response.ok ? 'success-message' : 'error-message';
+
+            if (response.ok) {
+                // Fjern forespørselen fra listen når den er behandlet
+                const itemToRemove = requestsList.querySelector(`div[data-request-id="${requestId}"]`);
+                if (itemToRemove) {
+                    itemToRemove.remove();
+                }
+                // Hvis ingen forespørsler er igjen, vis meldingen "No pending join requests."
+                if (requestsList.children.length === 0) {
+                    requestsList.innerHTML = '<p>No pending join requests.</p>';
+                }
+            }
+
+        } catch (error) {
+            console.error('Error processing request:', error);
+            messageContainer.textContent = 'An unexpected error occurred. Please try again.';
+            messageContainer.className = 'error-message';
+        }
+    };
+
+    requestsList.addEventListener('click', handleRequestAction);
 
     fetchAndDisplayRequests();
 });
