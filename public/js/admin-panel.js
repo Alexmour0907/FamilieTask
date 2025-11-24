@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestsList = document.getElementById('requests-list');
     const messageContainer = document.getElementById('message-container');
 
+    const createTaskForm = document.getElementById('create-task-form');
+    const taskFormMessage = document.getElementById('task-form-message');
+    const taskListContainer = document.getElementById('task-list-container');
+
     const fetchAndDisplayRequests = async () => {
         try {
             const response = await fetch('/api/join-requests');
@@ -88,7 +92,72 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Funksjon for å fetche og vise tasks
+    const fetchAndDisplayTasks = async () => {
+        try {
+            const response = await fetch('/api/tasks');
+            if (!response.ok) {
+                throw new Error('Failed to fetch tasks');
+            }
+
+            const tasks = await response.json();
+            taskListContainer.innerHTML = ''; // Klarer "Loading..." meldingen
+
+            if (tasks.length === 0) {
+                taskListContainer.innerHTML = '<p>No tasks available.</p>';
+                return;
+            }
+
+            const taskList = document.createElement('ul');
+            tasks.forEach(task => {
+                const item = document.createElement('li');
+                // Vi bruker creator_username fra API responsen
+                item.textContent = `Title: ${task.title} (Created by: ${task.creator_username}, Points: ${task.points_reward})`;
+                taskList.appendChild(item);
+            });
+            taskListContainer.appendChild(taskList);
+
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+            taskListContainer.innerHTML = '<p>Could not load tasks. Please try again later.</p>';
+        }
+    };
+
+    // Håndter opprettelse av ny task
+    const handleCreateTask = async (event) => {
+        event.preventDefault();
+
+        const formData = new FormData(createTaskForm);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+        const result = await response.json();
+
+        taskFormMessage.textContent = result.message;
+        taskFormMessage.style.display = 'block';
+        taskFormMessage.style.color = response.ok ? 'green' : 'red';
+
+        if (response.ok) {
+            createTaskForm.reset();
+            fetchAndDisplayTasks(); // Oppdater task listen
+        }
+    } catch (error) {
+        console.error('Error creating task:', error);
+        taskFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+        taskFormMessage.style.display = 'block';
+        taskFormMessage.style.color = 'red';
+    }
+};
+
+    createTaskForm.addEventListener('submit', handleCreateTask);
     requestsList.addEventListener('click', handleRequestAction);
 
     fetchAndDisplayRequests();
+    fetchAndDisplayTasks();
 });

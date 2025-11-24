@@ -7,10 +7,13 @@ FamilieTask is an app designed to make it easy to create and share tasks among f
 The project is in active development. Some key features have been implemented, providing a solid foundation for the application.
 
 ### Implemented Features:  ✔️
-- **User Registration:** New users can create an account.
-- **User Login:** Registered users can log in, and a session is created for them.
-- **Family Creation:** Logged-in users without a family are prompted to create one.
-- **Full Join Request Workflow:** A complete system for users to join families is now implemented.
+- **User Registration & Login:** New users can create an account and log in securely.
+- **Family Creation & Management:** Logged-in users can create a family, which establishes them as the owner.
+- **Full Join Request Workflow:** A complete system for users to request to join a family, and for family owners/admins to approve or reject requests.
+- **Task Management API:** Backend endpoints for creating and listing family tasks, with role-based access control.
+- **Admin Task UI:** The admin panel now includes functionality to create new tasks and view a list of all family tasks.
+- **Secure Configuration:** Project configuration is managed securely through `.env` files.
+- **Automated System Maintenance:** A periodic cleanup process automatically removes expired or rejected join requests from the database.
     - Users can request to join a family using a unique code.
     - Family `owner`s and `admin`s can view, `accept`, or `reject` these requests from a dedicated admin panel.
 - **Admin Panel Placeholder:** A basic admin panel is accessible to users with admin rights, currently used for managing join requests. Also laying the groundwork for future administrative features.
