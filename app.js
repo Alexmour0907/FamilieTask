@@ -5,6 +5,9 @@ const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const crypto = require('crypto'); // Dette er for Join-code generering, kan ikke bruke bcrypt her.
 
+// Last inn miljøvariabler fra .env-filen
+require('dotenv').config();
+
 const app = express();
 // PORT
 const PORT = 3000;
@@ -26,7 +29,7 @@ app.listen(PORT, () => {
 
 app.use(session({
     store: new FileStore({ path: './sessions', logFn: function(){} }),
-    secret: 'en-veldig-hemmelig-nokkel', // Replace with a long, random string
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -38,6 +41,28 @@ app.use(session({
 // Legg til body-parsing for skjema/JSON
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+// En funksjon for å fjerne utgåtte eller avviste join-forespørsler når de blir "expired"
+function cleanupExpiredJoinRequests() {
+    const sql = `
+        DELETE FROM JoinRequests 
+        WHERE (status = 'pending' OR status = 'rejected') AND expires_at < DATETIME('now')
+    `;
+    try {
+        const info = db.prepare(sql).run();
+        if (info.changes > 0) {
+            console.log(`[Cron Job] Cleaned up ${info.changes} expired or rejected join requests.`);
+        }
+    } catch (error) {
+        console.error('[Cron Job] Error cleaning up expired join requests:', error);
+    }
+}
+
+// Kjør cleanup hver time
+setInterval(cleanupExpiredJoinRequests, 1000 * 60 * 60);
+
+// Også kjør den en gang ved oppstart
+cleanupExpiredJoinRequests();
 
 // Middleware for å beskytte ruter som krever autentisering
 const requireLogin = (req, res, next) => {
