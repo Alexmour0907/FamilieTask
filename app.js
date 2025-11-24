@@ -391,3 +391,107 @@ app.post('/api/join-requests/:requestId/respond', requireLogin, (req, res) => {
         }
     }
 });
+
+// Task management routes
+
+// Hjelpefunksjoner for å hente familie-ID og brukerrolle
+const getUserFamilyId = (userId) => {
+    const familyStmt = db.prepare('SELECT family_id FROM FamilyMembers WHERE user_id = ?');
+    const familyMembership = familyStmt.get(userId);
+    return familyMembership ? familyMembership.family_id : null;
+}
+
+const getUserRoleInFamily = (userId, familyId) => {
+    const roleStmt = db.prepare('SELECT role FROM FamilyMembers WHERE user_id = ? AND family_id = ?');
+    const roleResult = roleStmt.get(userId, familyId);
+    return roleResult ? roleResult.role : null;
+}
+
+// Lage en ny task
+app.post('/api/tasks', requireLogin, (req, res) => {
+    const { title, description, difficulty, points_reward, created_by, created, deadline } = req.body;
+    const userId = req.session.user.id;
+
+    // Validering av input
+    if (!title || title.trim().length === 0) {
+        return res.status(400).json({ message: 'Task title is required.' });
+    }
+
+    if (title.trim().length > 28) {
+        return res.status(400).json({ message: 'Task title cannot exceed 28 characters.' });
+    }
+
+    // Aunteniseringssjekk for familie medlemskap
+    const familyId = getUserFamilyId(userId);
+    if (!familyId) {
+        return res.status(403).json({ message: 'You must be part of a family to create tasks.' });
+    }
+
+    const userRole = getUserRoleInFamily(userId, familyId);
+    if (userRole !== 'owner' && userRole !== 'admin') {
+        return res.status(403).json({ message: 'You do not have permission to create tasks.' });
+    }
+
+    try {
+        const insertTaskSql = `
+            INSERT INTO Tasks (family_id, title, description, difficulty, points_reward, created_by, deadline)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        const info = db.prepare(insertTaskSql).run(
+            familyId,
+            title.trim(),
+            description || null,
+            difficulty || 'medium',
+            points_reward  || 10,
+            userId,
+            deadline || null
+        );
+
+        // Fetch den nylig opprettede tasken
+        const getNewTaskSql = 'SELECT * FROM Tasks WHERE id = ?';
+        const newTask = db.prepare(getNewTaskSql).get(info.lastInsertRowid);
+
+        res.status(201).json({ message: 'Task created successfully!', task: newTask });
+
+    } catch (error) {
+        console.error('Error creating task:', error);
+        res.status(500).json({ message: 'Server error while creating task.' });
+    }
+});
+
+// Se tasks / hente alle tasks for familien
+app.get('/api/tasks', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    const familyId = getUserFamilyId(userId);
+
+    if (!familyId) {
+        // Brukeren er ikke i en familie
+        return res.status(200).json([]); // Returner tom liste
+    }
+
+    try {
+        // Denne spørringen kobler Tasks med "Users" for å hente brukernavnet til oppretteren. "Creator" aliaset brukes for users-tabellen.
+        const sql = `
+            SELECT
+                t.id,
+                t.title,
+                t.description,
+                t.difficulty,
+                t.points_reward,
+                t.created,
+                t.deadline,
+                creator.username AS creator_username
+            FROM Tasks t
+            JOIN Users creator ON t.created_by = creator.id
+            WHERE t.family_id = ?
+            ORDER BY t.created DESC
+        `;
+        const tasks = db.prepare(sql).all(familyId);
+        res.status(200).json(tasks);
+
+    } catch (error) {
+        console.error('Error fetching tasks:', error);
+        res.status(500).json({ message: 'Server error while fetching tasks.' });
+    }
+});

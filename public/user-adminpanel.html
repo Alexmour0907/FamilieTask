@@ -13,6 +13,35 @@
 
      <div id="message-container"></div>
 
+         <!-- Området for å lage ny task-->
+    <h2>Create New Task</h2>
+    <form id="create-task-form">
+        <div>
+            <label for="task-title">Title:</label>
+            <input type="text" id="task-title" name="title" required>
+        </div>
+        <div>
+            <label for="task-description">Description:</label>
+            <textarea id="task-description" name="description"></textarea>
+        </div>
+        <div>
+            <label for="task-points">Points:</label>
+            <input type="number" id="task-points" name="points_reward" value="10">
+        </div>
+        <button type="submit">Create Task</button>
+    </form>
+    <p id="task-form-message" style="display: none;"></p>
+
+    <hr>
+
+    <!-- Seksjon for å se tasks-->
+    <h2>Task List</h2>
+    <div id="task-list-container">
+        <p>Loading tasks...</p>
+    </div>
+
+    <hr>
+
     <div class="join-requests-container">
         <h2>Incoming Join Requests</h2>
         <div id="requests-list">
