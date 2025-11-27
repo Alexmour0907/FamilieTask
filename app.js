@@ -392,6 +392,30 @@ app.post('/api/join-requests/:requestId/respond', requireLogin, (req, res) => {
     }
 });
 
+app.get('/api/family-members', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    const familyId = getUserFamilyId(userId);
+
+    if (!familyId) {
+        return res.status(404).json({ message: 'User is not in a family.' });
+    }
+
+    try {
+        const sql = `
+            SELECT u.id, u.username 
+            FROM Users u
+            JOIN FamilyMembers fm ON u.id = fm.user_id
+            WHERE fm.family_id = ?
+            ORDER BY u.username
+        `;
+        const members = db.prepare(sql).all(familyId);
+        res.status(200).json(members);
+    } catch (error) {
+        console.error('Error fetching family members:', error);
+        res.status(500).json({ message: 'Server error while fetching family members.' });
+    }
+});
+
 // Task management routes
 
 // Hjelpefunksjoner for å hente familie-ID og brukerrolle
@@ -409,7 +433,7 @@ const getUserRoleInFamily = (userId, familyId) => {
 
 // Lage en ny task
 app.post('/api/tasks', requireLogin, (req, res) => {
-    const { title, description, difficulty, points_reward, created_by, created, deadline } = req.body;
+    const { title, description, difficulty, assigned_to, deadline } = req.body;
     const userId = req.session.user.id;
 
     // Validering av input
@@ -421,36 +445,67 @@ app.post('/api/tasks', requireLogin, (req, res) => {
         return res.status(400).json({ message: 'Task title cannot exceed 28 characters.' });
     }
 
-    // Aunteniseringssjekk for familie medlemskap
+    // Faste poengsummer basert på vanskelighetsgrad
+    const pointsMap = {
+        light: 5,
+        easy: 10,
+        medium: 25,
+        hard: 50
+    };
+    const taskDifficulty = difficulty || 'medium';
+    const points_reward = pointsMap[taskDifficulty];
+
+    // Hent familie og rolle
     const familyId = getUserFamilyId(userId);
     if (!familyId) {
         return res.status(403).json({ message: 'You must be part of a family to create tasks.' });
     }
-
     const userRole = getUserRoleInFamily(userId, familyId);
     if (userRole !== 'owner' && userRole !== 'admin') {
         return res.status(403).json({ message: 'You do not have permission to create tasks.' });
     }
 
-    try {
+    // Bruk en transaksjon for å sikre at både task og tildeling blir opprettet
+    const createTaskTransaction = db.transaction(() => {
+        // Opprett selve oppgaven
         const insertTaskSql = `
             INSERT INTO Tasks (family_id, title, description, difficulty, points_reward, created_by, deadline)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
-
-        const info = db.prepare(insertTaskSql).run(
+        const taskInfo = db.prepare(insertTaskSql).run(
             familyId,
             title.trim(),
             description || null,
-            difficulty || 'medium',
-            points_reward  || 10,
+            taskDifficulty,
+            points_reward,
             userId,
             deadline || null
         );
+        const newTaskId = taskInfo.lastInsertRowid;
 
-        // Fetch den nylig opprettede tasken
-        const getNewTaskSql = 'SELECT * FROM Tasks WHERE id = ?';
-        const newTask = db.prepare(getNewTaskSql).get(info.lastInsertRowid);
+        // 2. Opprett en tildeling i AssignedTasks
+        const assignmentStatus = assigned_to ? 'pending' : 'not_assigned';
+        const insertAssignmentSql = `
+            INSERT INTO AssignedTasks (task_id, user_id, status)
+            VALUES (?, ?, ?)
+        `;
+        db.prepare(insertAssignmentSql).run(newTaskId, assigned_to || null, assignmentStatus);
+
+        return newTaskId;
+    });
+
+    try {
+        const newTaskId = createTaskTransaction();
+        
+        // Hent den nylig opprettede oppgaven for å sende tilbake i responsen
+        const getNewTaskSql = `
+            SELECT t.*, at.status as assignment_status, u.username as assignee_username
+            FROM Tasks t
+            LEFT JOIN AssignedTasks at ON t.id = at.task_id
+            LEFT JOIN Users u ON at.user_id = u.id
+            WHERE t.id = ?
+        `;
+        const newTask = db.prepare(getNewTaskSql).get(newTaskId);
 
         res.status(201).json({ message: 'Task created successfully!', task: newTask });
 
@@ -466,12 +521,10 @@ app.get('/api/tasks', requireLogin, (req, res) => {
     const familyId = getUserFamilyId(userId);
 
     if (!familyId) {
-        // Brukeren er ikke i en familie
-        return res.status(200).json([]); // Returner tom liste
+        return res.status(200).json([]); // Returner tom liste hvis ikke i familie
     }
 
     try {
-        // Denne spørringen kobler Tasks med "Users" for å hente brukernavnet til oppretteren. "Creator" aliaset brukes for users-tabellen.
         const sql = `
             SELECT
                 t.id,
@@ -481,9 +534,14 @@ app.get('/api/tasks', requireLogin, (req, res) => {
                 t.points_reward,
                 t.created,
                 t.deadline,
-                creator.username AS creator_username
+                creator.username AS creator_username,
+                assignee.username AS assignee_username,
+                at.user_id AS assigned_to,
+                at.status AS assignment_status
             FROM Tasks t
             JOIN Users creator ON t.created_by = creator.id
+            LEFT JOIN AssignedTasks at ON t.id = at.task_id
+            LEFT JOIN Users assignee ON at.user_id = assignee.id
             WHERE t.family_id = ?
             ORDER BY t.created DESC
         `;

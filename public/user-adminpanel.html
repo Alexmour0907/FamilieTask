@@ -13,20 +13,36 @@
 
      <div id="message-container"></div>
 
-         <!-- Området for å lage ny task-->
+     <!-- Området for å lage ny task-->
     <h2>Create New Task</h2>
     <form id="create-task-form">
         <div>
             <label for="task-title">Title:</label>
-            <input type="text" id="task-title" name="title" required>
+            <input type="text" id="task-title" name="title" required maxlength="28">
         </div>
         <div>
             <label for="task-description">Description:</label>
             <textarea id="task-description" name="description"></textarea>
         </div>
         <div>
-            <label for="task-points">Points:</label>
-            <input type="number" id="task-points" name="points_reward" value="10">
+            <label for="task-difficulty">Difficulty:</label>
+            <select id="task-difficulty" name="difficulty">
+                <option value="light">Light (5 Points)</option>
+                <option value="easy">Easy (10 Points)</option>
+                <option value="medium" selected>Medium (25 Points)</option>
+                <option value="hard">Hard (50 Points)</option>
+            </select>
+        </div>
+        <div>
+            <label for="task-assigned-to">Assign To:</label>
+            <select id="task-assigned-to" name="assigned_to">
+                <option value="">-- Unassigned --</option>
+                <!-- Family members will be populated here by JS -->
+            </select>
+        </div>
+        <div>
+            <label for="task-deadline">Deadline (Optional):</label>
+            <input type="datetime-local" id="task-deadline" name="deadline">
         </div>
         <button type="submit">Create Task</button>
     </form>

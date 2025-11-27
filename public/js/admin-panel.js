@@ -1,27 +1,46 @@
 document.addEventListener('DOMContentLoaded', () => {
     const requestsList = document.getElementById('requests-list');
     const messageContainer = document.getElementById('message-container');
-
+    
     const createTaskForm = document.getElementById('create-task-form');
     const taskFormMessage = document.getElementById('task-form-message');
     const taskListContainer = document.getElementById('task-list-container');
+    const assignedToSelect = document.getElementById('task-assigned-to');
 
+    // Funksjon for å hente og populere familiemedlemmer i "Assign To" dropdown
+    const fetchAndPopulateFamilyMembers = async () => {
+        try {
+            const response = await fetch('/api/family-members');
+            if (!response.ok) {
+                throw new Error('Failed to fetch family members');
+            }
+            const members = await response.json();
+            members.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.id;
+                option.textContent = member.username;
+                assignedToSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error populating family members:', error);
+        }
+    };
+
+    // Funksjon for å hente og vise join-requests
     const fetchAndDisplayRequests = async () => {
         try {
             const response = await fetch('/api/join-requests');
             
             if (!response.ok) {
-                // Om brukeren ikke har owner eller admin rettigheter, returneres 401 eller 403.
-                // Frontend-systemet ber om dataene, og backend-systemet avgjør om brukeren har autorisasjon til å se dem ved å sjekke rollen sin i databasen.
                 if (response.status === 401 || response.status === 403) {
-                    requestsList.innerHTML = '<p>You do not have permission to view this page.</p>';
+                    document.querySelector('.join-requests-container').innerHTML = '<h2>Incoming Join Requests</h2><p>You do not have permission to view join requests.</p>';
                     return;
                 }
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const requests = await response.json();
-            requestsList.innerHTML = ''; // Klarerer "Loading..." mweldingen på html-siden
+            requestsList.innerHTML = ''; 
 
             if (requests.length === 0) {
                 requestsList.innerHTML = '<p>No pending join requests.</p>';
@@ -31,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
             requests.forEach(request => {
                 const requestElement = document.createElement('div');
                 requestElement.className = 'request-item';
+                // Lagt til data-request-id her for enklere fjerning
+                requestElement.setAttribute('data-request-id', request.requestId); 
                 requestElement.innerHTML = `
                     <p>
                         <strong>User:</strong> ${request.requesterUsername} (${request.requesterEmail})<br>
@@ -50,14 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Funksjon for å håndtere accept/reject av join-requests
     const handleRequestAction = async (event) => {
         const target = event.target;
         const isAccept = target.classList.contains('accept-btn');
         const isReject = target.classList.contains('reject-btn');
 
-        if (!isAccept && !isReject) {
-            return; // Click was not on a button
-        }
+        if (!isAccept && !isReject) return;
 
         const requestId = target.dataset.requestId;
         const action = isAccept ? 'accept' : 'reject';
@@ -74,12 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
             messageContainer.className = response.ok ? 'success-message' : 'error-message';
 
             if (response.ok) {
-                // Fjern forespørselen fra listen når den er behandlet
                 const itemToRemove = requestsList.querySelector(`div[data-request-id="${requestId}"]`);
                 if (itemToRemove) {
                     itemToRemove.remove();
                 }
-                // Hvis ingen forespørsler er igjen, vis meldingen "No pending join requests."
                 if (requestsList.children.length === 0) {
                     requestsList.innerHTML = '<p>No pending join requests.</p>';
                 }
@@ -92,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Funksjon for å fetche og vise tasks
+    // Funksjon for å hente og vise tasks med detaljer
     const fetchAndDisplayTasks = async () => {
         try {
             const response = await fetch('/api/tasks');
@@ -101,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const tasks = await response.json();
-            taskListContainer.innerHTML = ''; // Klarer "Loading..." meldingen
+            taskListContainer.innerHTML = '';
 
             if (tasks.length === 0) {
                 taskListContainer.innerHTML = '<p>No tasks available.</p>';
@@ -111,8 +129,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const taskList = document.createElement('ul');
             tasks.forEach(task => {
                 const item = document.createElement('li');
-                // Vi bruker creator_username fra API responsen
-                item.textContent = `Title: ${task.title} (Created by: ${task.creator_username}, Points: ${task.points_reward})`;
+                
+                let assignmentText = 'Unassigned';
+                if (task.assignee_username) {
+                    assignmentText = `Assigned to: ${task.assignee_username} (Status: ${task.assignment_status})`;
+                }
+
+                let deadlineText = task.deadline ? ` | Deadline: ${new Date(task.deadline).toLocaleString()}` : '';
+
+                item.innerHTML = `
+                    <strong>${task.title}</strong> (${task.difficulty}, ${task.points_reward} pts) - <em>Created by: ${task.creator_username}</em><br>
+                    <small>${assignmentText}${deadlineText}</small>
+                `;
                 taskList.appendChild(item);
             });
             taskListContainer.appendChild(taskList);
@@ -123,12 +151,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Håndter opprettelse av ny task
+    // Funksjon for å håndtere opprettelse av ny task
     const handleCreateTask = async (event) => {
         event.preventDefault();
 
         const formData = new FormData(createTaskForm);
         const data = Object.fromEntries(formData.entries());
+
+        // Fjern tomme valgfrie felt slik at de ikke sendes som tomme strenger
+        if (!data.assigned_to) delete data.assigned_to;
+        if (!data.deadline) delete data.deadline;
 
         try {
             const response = await fetch('/api/tasks', {
@@ -137,27 +169,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(data)
             });
 
-        const result = await response.json();
+            const result = await response.json();
 
-        taskFormMessage.textContent = result.message;
-        taskFormMessage.style.display = 'block';
-        taskFormMessage.style.color = response.ok ? 'green' : 'red';
+            taskFormMessage.textContent = result.message;
+            taskFormMessage.style.display = 'block';
+            taskFormMessage.style.color = response.ok ? 'green' : 'red';
 
-        if (response.ok) {
-            createTaskForm.reset();
-            fetchAndDisplayTasks(); // Oppdater task listen
+            if (response.ok) {
+                createTaskForm.reset();
+                fetchAndDisplayTasks(); // Oppdater task-listen med den nye oppgaven
+            }
+        } catch (error) {
+            console.error('Error creating task:', error);
+            taskFormMessage.textContent = 'An unexpected error occurred. Please try again.';
+            taskFormMessage.style.display = 'block';
+            taskFormMessage.style.color = 'red';
         }
-    } catch (error) {
-        console.error('Error creating task:', error);
-        taskFormMessage.textContent = 'An unexpected error occurred. Please try again.';
-        taskFormMessage.style.display = 'block';
-        taskFormMessage.style.color = 'red';
-    }
-};
+    };
 
+    // Legg til event listeners
     createTaskForm.addEventListener('submit', handleCreateTask);
     requestsList.addEventListener('click', handleRequestAction);
 
+    // Initialiser siden ved å hente all nødvendig data
+    fetchAndPopulateFamilyMembers();
     fetchAndDisplayRequests();
     fetchAndDisplayTasks();
 });
