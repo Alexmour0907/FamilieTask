@@ -16,15 +16,6 @@ const PORT = 3000;
 const Database = require('better-sqlite3');
 const db = new Database('FamilieTask_database.db');
 
-
-//Serve statiske filer fra "public"-mappen
-app.use(express.static('public'));
-
-//console log lenken til siden på localhost
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
-
 // Middleware
 
 app.use(session({
@@ -67,6 +58,10 @@ cleanupExpiredJoinRequests();
 // Middleware for å beskytte ruter som krever autentisering
 const requireLogin = (req, res, next) => {
     if (!req.session.user) {
+
+        if (req.accepts('html')) {
+            return res.redirect('/index.html');
+        }
         return res.status(401).json({ message: 'Authentication required. Please log in.' });
     }
     next();
@@ -77,9 +72,21 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
 
+// Beskyttede ruter
+app.get('/dashboard.html', requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/createNewFamily.html', requireLogin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'createNewFamily.html'));
+});
+
 app.get('/admin', requireLogin, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'user-adminpanel.html'));
 });
+
+//Serve statiske filer fra "public"-mappen
+app.use(express.static('public'));
 
 // Registration route
 app.post('/register', async (req, res) => {
@@ -552,4 +559,9 @@ app.get('/api/tasks', requireLogin, (req, res) => {
         console.error('Error fetching tasks:', error);
         res.status(500).json({ message: 'Server error while fetching tasks.' });
     }
+});
+
+//console log lenken til siden på localhost
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
