@@ -5,13 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/images/Logo.png" type="image/x-icon">
     <title>Family Dashboard</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
     <script src="/js/dashboard.js" defer></script>
 </head>
 <body>
-    <!-- Midlertidig -->
-    <h1>Welcome to Your Dashboard</h1>
-    <div id="admin-button-container">
-        <!-- Admin Panel knapp vil bli dynamisk satt inn her av JavaScript, basert på brukerens rettigheter -->
+    <div class="dashboard-container">
+        <header style="margin-bottom: 20px;">
+            <h1>Dashboard</h1>
+            <div id="admin-button-container"></div>
+        </header>
+
+        <main class="dashboard-grid">
+            <div class="card" id="your-tasks-card">
+                <div class="card-header">
+                    <h2>Your Tasks</h2>
+                    <span class="icon">↗</span>
+                </div>
+                <div class="card-content">
+                    <ul class="task-list" id="my-tasks-list">
+                        <!-- Tasks kommer til å bli klonet fra malen under og satt inn her -->
+                    </ul>
+                    
+                    <!-- Dette er templatet for en task, den er gjemt by defualt -->
+                    <template id="task-item-template">
+                        <li class="task-item">
+                            <div class="task-avatar">A</div>
+                            <span class="task-title">Task Title Placeholder</span>
+                            <!-- Knappen og status-spannet vil bli vist/skjult av JS -->
+                            <button class="task-complete-btn"></button>
+                            <span class="task-status" style="display: none;">Pending Approval</span>
+                        </li>
+                    </template>
+
+                    <p id="no-tasks-message" style="display: none;">You have no assigned tasks at the moment.</p>
+                </div>
+            </div>
+        </main>
     </div>
 </body>
 </html>

@@ -8,18 +8,21 @@ The project is in active development. Some key features have been implemented, p
 
 ### Implemented Features:  ✔️
 - **User Registration & Login:** New users can create an account and log in securely.
+- **Multi-Family Architecture:** The backend now fully supports users being members of multiple families. A session-based system tracks the user's active family, ensuring all data is correctly filtered.
 - **Family Creation & Management:** Logged-in users can create a family, which establishes them as the owner.
 - **Full Join Request Workflow:** A complete system for users to request to join a family, and for family owners/admins to approve or reject requests.
-- **Task Management API:** Backend endpoints for creating and listing family tasks, with role-based access control.
-- **Admin Task UI:** The admin panel now includes functionality to create new tasks and view a list of all family tasks.
+- **Task Completion Workflow (Backend):** A complete backend API for users to mark tasks as complete (`pending_approval`) and for admins to `approve` or `reject` them, including awarding points.
+- **"My Tasks" Dashboard UI:** A new section on the dashboard where users can view their assigned tasks for the active family and mark them as complete.
+- **Admin Task UI:** The admin panel includes functionality to create new tasks and view a list of all family tasks.
 - **Secure Configuration:** Project configuration is managed securely through `.env` files.
 - **Automated System Maintenance:** A periodic cleanup process automatically removes expired or rejected join requests from the database.
-    - Users can request to join a family using a unique code.
-    - Family `owner`s and `admin`s can view, `accept`, or `reject` these requests from a dedicated admin panel.
-- **Admin Panel Placeholder:** A basic admin panel is accessible to users with admin rights, currently used for managing join requests. Also laying the groundwork for future administrative features.
+  - **Note:** A bug has been identified where some expired requests are not being removed correctly. This is a known issue and will be addressed in a future update.
 
 ### Next Steps 🚀
-The next steps for the project are currently undecided. With the core user and family management system now in place, we can explore several feature directions, such as task creation, assignment, and the points-based reward system.
+- **Admin Approval UI:** Create the frontend interface for admins to view and approve/reject tasks that are pending approval.
+- **Family Switching UI:** Implement the dropdown or UI element on the dashboard for users to switch between their families, using the new API endpoints.
+- **Gamification and Leaderboards:** Build out the UI to display user points and family leaderboards.
+- **Dynamic Avatars:** Make the user/task avatars dynamic instead of static placeholders.
 
 ## ✨ Planned Features
 - **Complete Family Management:** Implement the full workflow for adding, managing, and removing family members.

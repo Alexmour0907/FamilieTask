@@ -150,8 +150,12 @@ app.post('/login', async (req, res) => {
         };
 
         // Sjekk familie medlemskap
-        const familyStmt = db.prepare('SELECT family_id FROM FamilyMembers WHERE user_id = ?');
+        const familyStmt = db.prepare('SELECT family_id FROM FamilyMembers WHERE user_id = ? LIMIT 1');
         const familyMembership = familyStmt.get(user.id);
+
+        if (familyMembership) {
+            req.session.currentFamilyId = familyMembership.family_id;
+        }
 
         // Velg redirect URL basert på familie medlemskap
         const redirectUrl = familyMembership ? '/dashboard.html' : '/createNewFamily.html';
@@ -200,6 +204,8 @@ app.post('/createFamily', requireLogin, (req, res) => {
                 'INSERT INTO FamilyMembers (family_id, user_id, role) VALUES (?, ?, ?)'
             );
             insertMemberStmt.run(familyId, userId, 'owner');
+
+            req.session.currentFamilyId = familyId;
         });
 
         createFamilyTx();
@@ -268,6 +274,66 @@ app.post('/join-request', requireLogin, (req, res) => {
     }
 });
 
+// Hent alle familier for en bruker
+// FORMÅL: Gir frontend en liste over alle familier brukeren er medlem av.
+app.get('/api/user/families', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    try {
+        const sql = `
+            SELECT f.id, f.name
+            FROM Families f
+            JOIN FamilyMembers fm ON f.id = fm.family_id
+            WHERE fm.user_id = ?
+            ORDER BY f.name
+        `;
+        const families = db.prepare(sql).all(userId);
+        res.status(200).json(families);
+    } catch (error) {
+        console.error('Error fetching user families:', error);
+        res.status(500).json({ message: 'Server error while fetching families.' });
+    }
+});
+
+// Bytt aktiv familie i session
+// FORMÅL: Lar brukeren bytte hvilken familie som er "aktiv".
+// VIKTIG: Oppdaterer `req.session.currentFamilyId`, som styrer hvilken families data som vises.
+app.post('/api/user/switch-family', requireLogin, (req, res) => {
+    const { familyId } = req.body;
+    const userId = req.session.user.id;
+
+    if (!familyId) {
+        return res.status(400).json({ message: 'Family ID is required.' });
+    }
+
+    try {
+        // Verifiser at brukeren er medlem av denne familien
+        const sql = 'SELECT 1 FROM FamilyMembers WHERE user_id = ? AND family_id = ?';
+        const member = db.prepare(sql).get(userId, familyId);
+
+        if (!member) {
+            return res.status(403).json({ message: 'You are not a member of this family.' });
+        }
+
+        // Oppdater den aktive familien i brukerens session
+        req.session.currentFamilyId = familyId;
+        res.status(200).json({ message: `Switched to family ${familyId} successfully.` });
+
+    } catch (error) {
+        console.error('Error switching family:', error);
+        res.status(500).json({ message: 'Server error while switching family.' });
+    }
+});
+
+// Hent den nåværende aktive familien
+// FORMÅL: Lar frontend sjekke hvilken familie som er aktiv.
+// BRUK: Nyttig når siden lastes for å sette riktig tilstand i UI, f.eks. vise navnet på aktiv familie.
+app.get('/api/user/current-family', requireLogin, (req, res) => {
+    if (req.session.currentFamilyId) {
+        res.status(200).json({ currentFamilyId: req.session.currentFamilyId });
+    } else {
+        res.status(404).json({ message: 'No active family selected.' });
+    }
+});
 
 // Få påventende join-forespørsler (for familieeier og administratorer)
 app.get('/api/join-requests', requireLogin, (req, res) => {
@@ -400,11 +466,10 @@ app.post('/api/join-requests/:requestId/respond', requireLogin, (req, res) => {
 });
 
 app.get('/api/family-members', requireLogin, (req, res) => {
-    const userId = req.session.user.id;
-    const familyId = getUserFamilyId(userId);
+    const familyId = req.session.currentFamilyId;
 
     if (!familyId) {
-        return res.status(404).json({ message: 'User is not in a family.' });
+        return res.status(404).json({ message: 'User is not in a family, or no active family selected. Please select an active family.' });
     }
 
     try {
@@ -424,13 +489,6 @@ app.get('/api/family-members', requireLogin, (req, res) => {
 });
 
 // Task management routes
-
-// Hjelpefunksjoner for å hente familie-ID og brukerrolle
-const getUserFamilyId = (userId) => {
-    const familyStmt = db.prepare('SELECT family_id FROM FamilyMembers WHERE user_id = ?');
-    const familyMembership = familyStmt.get(userId);
-    return familyMembership ? familyMembership.family_id : null;
-}
 
 const getUserRoleInFamily = (userId, familyId) => {
     const roleStmt = db.prepare('SELECT role FROM FamilyMembers WHERE user_id = ? AND family_id = ?');
@@ -463,7 +521,7 @@ app.post('/api/tasks', requireLogin, (req, res) => {
     const points_reward = pointsMap[taskDifficulty];
 
     // Hent familie og rolle
-    const familyId = getUserFamilyId(userId);
+    const familyId = req.session.currentFamilyId;
     if (!familyId) {
         return res.status(403).json({ message: 'You must be part of a family to create tasks.' });
     }
@@ -524,8 +582,7 @@ app.post('/api/tasks', requireLogin, (req, res) => {
 
 // Se tasks / hente alle tasks for familien
 app.get('/api/tasks', requireLogin, (req, res) => {
-    const userId = req.session.user.id;
-    const familyId = getUserFamilyId(userId);
+    const familyId = req.session.currentFamilyId;
 
     if (!familyId) {
         return res.status(200).json([]); // Returner tom liste hvis ikke i familie
@@ -558,6 +615,155 @@ app.get('/api/tasks', requireLogin, (req, res) => {
     } catch (error) {
         console.error('Error fetching tasks:', error);
         res.status(500).json({ message: 'Server error while fetching tasks.' });
+    }
+});
+
+// Hente oppgaver tildelt til den innloggede brukeren
+app.get('/api/mytasks', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    const familyId = req.session.currentFamilyId; // Hent aktiv familie
+
+    if (!familyId) {
+        return res.status(200).json([]); // Returner tom liste hvis ingen familie er valgt
+    }
+
+    try {
+        const sql = `
+            SELECT
+                t.id AS task_id,
+                at.id AS assignment_id,
+                t.title,
+                t.description,
+                t.difficulty,
+                t.points_reward,
+                t.deadline,
+                at.status
+            FROM AssignedTasks at
+            JOIN Tasks t ON at.task_id = t.id
+            WHERE at.user_id = ? AND t.family_id = ? AND at.status IN ('pending', 'completed')
+            ORDER BY t.deadline ASC, t.created DESC
+        `;
+        const myTasks = db.prepare(sql).all(userId, familyId); // Legg til familyId her
+        res.status(200).json(myTasks);
+    } catch (error) {
+        console.error('Error fetching user tasks:', error);
+        res.status(500).json({ message: 'Server error while fetching your tasks.' });
+    }
+});
+
+// Bruker markerer en av sine tildelte oppgaver som fullført (venter på godkjenning)
+app.post('/api/tasks/:assignmentId/complete', requireLogin, (req, res) => {
+    const { assignmentId } = req.params;
+    const userId = req.session.user.id;
+
+    try {
+        const getAssignmentSql = 'SELECT user_id, status FROM AssignedTasks WHERE id = ?';
+        const assignment = db.prepare(getAssignmentSql).get(assignmentId);
+
+        if (!assignment) {
+            return res.status(404).json({ message: 'Task assignment not found.' });
+        }
+
+        if (assignment.user_id !== userId) {
+            return res.status(403).json({ message: 'You are not authorized to modify this task.' });
+        }
+
+        if (assignment.status !== 'pending') {
+            return res.status(400).json({ message: `Cannot complete a task that is already in '${assignment.status}' status.` });
+        }
+
+        const updateSql = "UPDATE AssignedTasks SET status = 'completed' WHERE id = ?";
+        db.prepare(updateSql).run(assignmentId);
+
+        res.status(200).json({ message: 'Task marked as complete. Awaiting approval.' });
+
+    } catch (error) {
+        console.error('Error completing task:', error);
+        res.status(500).json({ message: 'Server error while completing task.' });
+    }
+});
+
+//Admin/eier godkjenner en fullført oppgave
+app.post('/api/tasks/:assignmentId/approve', requireLogin, (req, res) => {
+    const { assignmentId } = req.params;
+    const adminUserId = req.session.user.id;
+
+    try {
+        const transaction = db.transaction(() => {
+            const sql = `
+                SELECT
+                    at.user_id,
+                    at.status,
+                    t.points_reward,
+                    fm.role
+                FROM AssignedTasks at
+                JOIN Tasks t ON at.task_id = t.id
+                JOIN FamilyMembers fm ON t.family_id = fm.family_id AND fm.user_id = ?
+                WHERE at.id = ?
+            `;
+            const taskInfo = db.prepare(sql).get(adminUserId, assignmentId);
+
+            if (!taskInfo) {
+                throw { statusCode: 404, message: 'Task not found or you do not have rights in this family.' };
+            }
+            if (taskInfo.role !== 'owner' && taskInfo.role !== 'admin') {
+                throw { statusCode: 403, message: 'You do not have permission to approve this task.' };
+            }
+            if (taskInfo.status !== 'completed') {
+                throw { statusCode: 400, message: 'Task is not marked as completed.' };
+            }
+
+            // Oppdater status til 'approved'
+            const updateAssignmentSql = "UPDATE AssignedTasks SET status = 'approved' WHERE id = ?";
+            db.prepare(updateAssignmentSql).run(assignmentId);
+
+            // Tildel poeng til brukeren
+            const updateUserPointsSql = "UPDATE Users SET points = points + ? WHERE id = ?";
+            db.prepare(updateUserPointsSql).run(taskInfo.points_reward, taskInfo.user_id);
+
+            return { message: 'Task approved and points awarded.' };
+        });
+
+        const result = transaction();
+        res.status(200).json(result);
+
+    } catch (error) {
+        res.status(error.statusCode || 500).json({ message: error.message || 'Server error while approving task.' });
+    }
+});
+
+// Admin/eier avviser en fullført oppgave
+app.post('/api/tasks/:assignmentId/reject', requireLogin, (req, res) => {
+    const { assignmentId } = req.params;
+    const adminUserId = req.session.user.id;
+
+    try {
+        const sql = `
+            SELECT at.status, fm.role
+            FROM AssignedTasks at
+            JOIN Tasks t ON at.task_id = t.id
+            JOIN FamilyMembers fm ON t.family_id = fm.family_id AND fm.user_id = ?
+            WHERE at.id = ?
+        `;
+        const taskInfo = db.prepare(sql).get(adminUserId, assignmentId);
+
+        if (!taskInfo) {
+            return res.status(404).json({ message: 'Task not found or you do not belong to this family.' });
+        }
+        if (taskInfo.role !== 'owner' && taskInfo.role !== 'admin') {
+            return res.status(403).json({ message: 'You do not have permission to reject tasks.' });
+        }
+        if (taskInfo.status !== 'completed') {
+            return res.status(400).json({ message: `Cannot reject a task with status '${taskInfo.status}'.` });
+        }
+
+        const updateSql = "UPDATE AssignedTasks SET status = 'pending' WHERE id = ?";
+        db.prepare(updateSql).run(assignmentId);
+
+        res.status(200).json({ message: 'Task completion rejected. Status has been reset to pending.' });
+    } catch (error) {
+        console.error('Error rejecting task:', error);
+        res.status(500).json({ message: 'Server error while rejecting task.' });
     }
 });
 
