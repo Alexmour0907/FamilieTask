@@ -683,6 +683,43 @@ app.post('/api/tasks/:assignmentId/complete', requireLogin, (req, res) => {
     }
 });
 
+// Hent oppgaver som venter på godkjenning (kun for admin/eier)
+app.get('/api/tasks/pending-approval', requireLogin, (req, res) => {
+    const userId = req.session.user.id;
+    const familyId = req.session.currentFamilyId;
+
+    if (!familyId) {
+        return res.status(400).json({ message: 'No active family selected.' });
+    }
+
+    // Sjekk om brukeren er admin eller eier for den aktive familien
+    const userRole = getUserRoleInFamily(userId, familyId);
+    if (userRole !== 'owner' && userRole !== 'admin') {
+        return res.status(403).json({ message: 'You do not have permission to view this data.' });
+    }
+
+    try {
+        const sql = `
+            SELECT
+                at.id AS assignment_id,
+                t.title,
+                t.points_reward,
+                u.username AS completed_by
+            FROM AssignedTasks at
+            JOIN Tasks t ON at.task_id = t.id
+            JOIN Users u ON at.user_id = u.id
+            WHERE t.family_id = ? AND at.status = 'completed'
+            ORDER BY at.assigned_date ASC
+        `;
+        const pendingTasks = db.prepare(sql).all(familyId);
+        res.status(200).json(pendingTasks);
+
+    } catch (error) {
+        console.error('Error fetching tasks pending approval:', error);
+        res.status(500).json({ message: 'Server error while fetching tasks for approval.' });
+    }
+});
+
 //Admin/eier godkjenner en fullført oppgave
 app.post('/api/tasks/:assignmentId/approve', requireLogin, (req, res) => {
     const { assignmentId } = req.params;
@@ -695,6 +732,7 @@ app.post('/api/tasks/:assignmentId/approve', requireLogin, (req, res) => {
                     at.user_id,
                     at.status,
                     t.points_reward,
+                    t.family_id,
                     fm.role
                 FROM AssignedTasks at
                 JOIN Tasks t ON at.task_id = t.id
@@ -718,8 +756,13 @@ app.post('/api/tasks/:assignmentId/approve', requireLogin, (req, res) => {
             db.prepare(updateAssignmentSql).run(assignmentId);
 
             // Tildel poeng til brukeren
-            const updateUserPointsSql = "UPDATE Users SET points = points + ? WHERE id = ?";
-            db.prepare(updateUserPointsSql).run(taskInfo.points_reward, taskInfo.user_id);
+            const awardPointsSql = `
+                INSERT INTO Points (user_id, family_id, points)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id, family_id) DO UPDATE SET
+                points = points + excluded.points;
+            `;
+            db.prepare(awardPointsSql).run(taskInfo.user_id, taskInfo.family_id, taskInfo.points_reward);
 
             return { message: 'Task approved and points awarded.' };
         });

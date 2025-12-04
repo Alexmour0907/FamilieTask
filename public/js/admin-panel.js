@@ -1,87 +1,129 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const requestsList = document.getElementById('requests-list');
-    const messageContainer = document.getElementById('message-container');
-    
+    // --- Element-referanser ---
+    const joinRequestsList = document.getElementById('join-requests-list');
+    const approvalTasksList = document.getElementById('approval-tasks-list');
+    const userList = document.getElementById('user-list');
+    const allTasksList = document.getElementById('all-tasks-list');
+    const createTaskModal = document.getElementById('create-task-modal');
     const createTaskForm = document.getElementById('create-task-form');
-    const taskFormMessage = document.getElementById('task-form-message');
-    const taskListContainer = document.getElementById('task-list-container');
-    const assignedToSelect = document.getElementById('task-assigned-to');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const createNewTaskBtn = document.querySelector('.create-new-task-btn');
 
-    // Funksjon for å hente og populere familiemedlemmer i "Assign To" dropdown
-    const fetchAndPopulateFamilyMembers = async () => {
-        try {
-            const response = await fetch('/api/family-members');
-            if (!response.ok) {
-                throw new Error('Failed to fetch family members');
-            }
-            const members = await response.json();
-            members.forEach(member => {
-                const option = document.createElement('option');
-                option.value = member.id;
-                option.textContent = member.username;
-                assignedToSelect.appendChild(option);
-            });
-        } catch (error) {
-            console.error('Error populating family members:', error);
-        }
-    };
+    // --- Funksjoner for datainnhenting og rendering ---
 
-    // Funksjon for å hente og vise join-requests
+    /**
+     * Henter og viser innkommende join-requests.
+     */
     const fetchAndDisplayRequests = async () => {
+        const template = document.getElementById('join-request-template');
+        if (!joinRequestsList || !template) return;
+
         try {
             const response = await fetch('/api/join-requests');
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    document.querySelector('.join-requests-container').innerHTML = '<h2>Incoming Join Requests</h2><p>You do not have permission to view join requests.</p>';
-                    return;
-                }
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
             const requests = await response.json();
-            requestsList.innerHTML = ''; 
+            joinRequestsList.innerHTML = ''; // Tømmer listen
 
             if (requests.length === 0) {
-                requestsList.innerHTML = '<p>No pending join requests.</p>';
+                joinRequestsList.innerHTML = '<p>No pending join requests.</p>';
                 return;
             }
 
             requests.forEach(request => {
-                const requestElement = document.createElement('div');
-                requestElement.className = 'request-item';
-                // Lagt til data-request-id her for enklere fjerning
-                requestElement.setAttribute('data-request-id', request.requestId); 
-                requestElement.innerHTML = `
-                    <p>
-                        <strong>User:</strong> ${request.requesterUsername} (${request.requesterEmail})<br>
-                        <strong>Status:</strong> ${request.status}<br>
-                        <strong>Created:</strong> ${new Date(request.requested_at).toLocaleString()}<br>
-                        <strong>Expires:</strong> ${new Date(request.expires_at).toLocaleString()}
-                    </p>
-                    <button class="accept-btn" data-request-id="${request.requestId}">Accept</button>
-                    <button class="reject-btn" data-request-id="${request.requestId}">Reject</button>
-                `;
-                requestsList.appendChild(requestElement);
+                const clone = template.content.cloneNode(true);
+                const item = clone.querySelector('.request-item');
+                item.dataset.requestId = request.requestId;
+
+                clone.querySelector('.username').textContent = request.requesterUsername;
+                clone.querySelector('.email').textContent = request.requesterEmail;
+                clone.querySelector('.timestamp').textContent = `Expires: ${new Date(request.expires_at).toLocaleDateString()}`;
+                
+                // Legger til event listeners direkte på knappene
+                clone.querySelector('.accept-btn').addEventListener('click', () => handleJoinRequestAction(request.requestId, 'accept'));
+                clone.querySelector('.reject-btn').addEventListener('click', () => handleJoinRequestAction(request.requestId, 'reject'));
+
+                joinRequestsList.appendChild(clone);
             });
 
         } catch (error) {
             console.error('Error fetching join requests:', error);
-            requestsList.innerHTML = '<p>Could not load join requests. Please try again later.</p>';
+            joinRequestsList.innerHTML = '<p>Could not load join requests.</p>';
         }
     };
 
-    // Funksjon for å håndtere accept/reject av join-requests
-    const handleRequestAction = async (event) => {
-        const target = event.target;
-        const isAccept = target.classList.contains('accept-btn');
-        const isReject = target.classList.contains('reject-btn');
+    /**
+     * Henter og viser oppgaver som venter på godkjenning.
+     */
+    const fetchPendingApprovalTasks = async () => {
+        if (!approvalTasksList) return;
+        try {
+            const response = await fetch('/api/tasks/pending-approval');
+            if (!response.ok) throw new Error('Failed to fetch tasks for approval.');
+            
+            const tasks = await response.json();
+            approvalTasksList.innerHTML = ''; // Tømmer listen
 
-        if (!isAccept && !isReject) return;
+            if (tasks.length === 0) {
+                approvalTasksList.innerHTML = '<li>No tasks are currently awaiting approval.</li>';
+                return;
+            }
 
-        const requestId = target.dataset.requestId;
-        const action = isAccept ? 'accept' : 'reject';
+            tasks.forEach(task => {
+                const item = document.createElement('li');
+                item.className = 'approval-item'; // Bruker en klasse for styling
+                item.dataset.assignmentId = task.assignment_id;
+                item.innerHTML = `
+                    <div class="task-info">
+                        <span class="task-title">${task.title}</span>
+                        <span class="completed-by">Completed by: ${task.completed_by}</span>
+                    </div>
+                    <span class="points-reward">${task.points_reward}p</span>
+                    <div class="actions">
+                        <button class="approve-btn">Approve</button>
+                        <button class="reject-btn">Reject</button>
+                    </div>
+                `;
+                // Legger til event listeners direkte på knappene
+                item.querySelector('.approve-btn').addEventListener('click', () => handleTaskApprovalAction(task.assignment_id, 'approve'));
+                item.querySelector('.reject-btn').addEventListener('click', () => handleTaskApprovalAction(task.assignment_id, 'reject'));
 
+                approvalTasksList.appendChild(item);
+            });
+        } catch (error) {
+            console.error('Error fetching pending tasks:', error);
+            approvalTasksList.innerHTML = '<li>Could not load tasks for approval.</li>';
+        }
+    };
+
+    const fetchFamilyMembersForDropdown = async () => {
+        const assignToSelect = document.getElementById('task-assign-to');
+        if (!assignToSelect) return;
+        try {
+            const response = await fetch('/api/family-members');
+            if (!response.ok) throw new Error('Failed to fetch family members.');
+            const members = await response.json();
+
+            assignToSelect.innerHTML = '<option value="">Unassigned</option>'; // Standardvalg
+
+            members.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.user_id;
+                option.textContent = member.username;
+                assignToSelect.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error fetching family members:', error);
+        }
+    };
+
+
+    // --- Funksjoner for å håndtere brukerhandlinger ---
+
+    /**
+     * Håndterer 'accept'/'reject' for join-requests.
+     */
+    const handleJoinRequestAction = async (requestId, action) => {
         try {
             const response = await fetch(`/api/join-requests/${requestId}/respond`, {
                 method: 'POST',
@@ -89,110 +131,132 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ action })
             });
 
-            const result = await response.json();
-            messageContainer.textContent = result.message;
-            messageContainer.className = response.ok ? 'success-message' : 'error-message';
+            if (response.ok) {
+                // Fjerner elementet fra UI ved suksess
+                const itemToRemove = joinRequestsList.querySelector(`li[data-request-id="${requestId}"]`);
+                if (itemToRemove) itemToRemove.remove();
+                // Sjekker om listen er tom etter fjerning
+                if (joinRequestsList.children.length === 0 || (joinRequestsList.children.length === 1 && joinRequestsList.children[0].tagName !== 'LI')) {
+                    joinRequestsList.innerHTML = '<p>No pending join requests.</p>';
+                }
+            } else {
+                const result = await response.json();
+                alert(`Error: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Error processing join request:', error);
+            alert('An unexpected error occurred.');
+        }
+    };
+
+    /**
+     * Håndterer 'approve'/'reject' for fullførte oppgaver.
+     */
+    const handleTaskApprovalAction = async (assignmentId, action) => {
+        const endpointAction = action === 'reject' ? 'reject' : 'approve';
+        try {
+            const response = await fetch(`/api/tasks/${assignmentId}/${endpointAction}`, {
+                method: 'POST'
+            });
 
             if (response.ok) {
-                const itemToRemove = requestsList.querySelector(`div[data-request-id="${requestId}"]`);
-                if (itemToRemove) {
-                    itemToRemove.remove();
+                // Fjerner elementet fra UI ved suksess
+                const itemToRemove = approvalTasksList.querySelector(`li[data-assignment-id="${assignmentId}"]`);
+                if (itemToRemove) itemToRemove.remove();
+                if (approvalTasksList.children.length === 0) {
+                    approvalTasksList.innerHTML = '<li>No tasks are currently awaiting approval.</li>';
                 }
-                if (requestsList.children.length === 0) {
-                    requestsList.innerHTML = '<p>No pending join requests.</p>';
-                }
+            } else {
+                const result = await response.json();
+                alert(`Error: ${result.message}`);
             }
-
         } catch (error) {
-            console.error('Error processing request:', error);
-            messageContainer.textContent = 'An unexpected error occurred. Please try again.';
-            messageContainer.className = 'error-message';
+            console.error('Error processing task approval:', error);
+            alert('An unexpected error occurred.');
         }
     };
 
-    // Funksjon for å hente og vise tasks med detaljer
-    const fetchAndDisplayTasks = async () => {
-        try {
-            const response = await fetch('/api/tasks');
-            if (!response.ok) {
-                throw new Error('Failed to fetch tasks');
-            }
-
-            const tasks = await response.json();
-            taskListContainer.innerHTML = '';
-
-            if (tasks.length === 0) {
-                taskListContainer.innerHTML = '<p>No tasks available.</p>';
-                return;
-            }
-
-            const taskList = document.createElement('ul');
-            tasks.forEach(task => {
-                const item = document.createElement('li');
-                
-                let assignmentText = 'Unassigned';
-                if (task.assignee_username) {
-                    assignmentText = `Assigned to: ${task.assignee_username} (Status: ${task.assignment_status})`;
-                }
-
-                let deadlineText = task.deadline ? ` | Deadline: ${new Date(task.deadline).toLocaleString()}` : '';
-
-                item.innerHTML = `
-                    <strong>${task.title}</strong> (${task.difficulty}, ${task.points_reward} pts) - <em>Created by: ${task.creator_username}</em><br>
-                    <small>${assignmentText}${deadlineText}</small>
-                `;
-                taskList.appendChild(item);
-            });
-            taskListContainer.appendChild(taskList);
-
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            taskListContainer.innerHTML = '<p>Could not load tasks. Please try again later.</p>';
-        }
-    };
-
-    // Funksjon for å håndtere opprettelse av ny task
     const handleCreateTask = async (event) => {
         event.preventDefault();
 
-        const formData = new FormData(createTaskForm);
-        const data = Object.fromEntries(formData.entries());
-
-        // Fjern tomme valgfrie felt slik at de ikke sendes som tomme strenger
-        if (!data.assigned_to) delete data.assigned_to;
-        if (!data.deadline) delete data.deadline;
+        const taskData = {
+            title: document.getElementById('task-title').value,
+            description: document.getElementById('task-description').value,
+            difficulty: document.getElementById('task-difficulty').value,
+            assigned_to: document.getElementById('task-assign-to').value || null,
+            deadline: document.getElementById('task-deadline').value || null
+        };
 
         try {
             const response = await fetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                body: JSON.stringify(taskData)
             });
 
-            const result = await response.json();
-
-            taskFormMessage.textContent = result.message;
-            taskFormMessage.style.display = 'block';
-            taskFormMessage.style.color = response.ok ? 'green' : 'red';
-
             if (response.ok) {
+                alert('Task created successfully!');
                 createTaskForm.reset();
-                fetchAndDisplayTasks(); // Oppdater task-listen med den nye oppgaven
+                createTaskModal.style.display = 'none';
+            } else {
+                const result = await response.json();
+                alert(`Error: ${result.message}`);
             }
         } catch (error) {
             console.error('Error creating task:', error);
-            taskFormMessage.textContent = 'An unexpected error occurred. Please try again.';
-            taskFormMessage.style.display = 'block';
-            taskFormMessage.style.color = 'red';
+            alert('An unexpected error occurred.');
         }
     };
 
-    // Legg til event listeners
-    createTaskForm.addEventListener('submit', handleCreateTask);
-    requestsList.addEventListener('click', handleRequestAction);
+    // --- Modal-kontroll ---
+    if (createNewTaskBtn) {
+        createNewTaskBtn.addEventListener('click', () => {
+            fetchFamilyMembersForDropdown();
+            createTaskModal.style.display = 'flex';
+            lucide.createIcons();
+        });
+    }
 
-    // Initialiser siden ved å hente all nødvendig data
-    fetchAndPopulateFamilyMembers();
-    fetchAndDisplayRequests();
-    fetchAndDisplayTasks();
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+            createTaskModal.style.display = 'none';
+        });
+    }
+
+    if (createTaskModal) {
+        createTaskModal.addEventListener('click', (event) => {
+            if (event.target === createTaskModal) {
+                createTaskModal.style.display = 'none';
+            }
+        });
+    }
+
+    // --- Skjema-innsending ---
+    if (createTaskForm) {
+        createTaskForm.addEventListener('submit', handleCreateTask);
+    }
+
+    // --- Placeholder-funksjoner for fremtidig utvikling ---
+    const displayUserManagementPlaceholder = () => {
+        if (userList) {
+            userList.innerHTML = '<tr><td colspan="4" style="text-align: center;">User management is coming soon.</td></tr>';
+        }
+    };
+
+    const displayAllTasksPlaceholder = () => {
+        if (allTasksList) {
+            allTasksList.innerHTML = '<li style="text-align: center;">Viewing all family tasks is coming soon.</li>';
+        }
+    };
+
+    // --- Initialiser siden ---
+    const initializePage = () => {
+        fetchAndDisplayRequests();
+        fetchPendingApprovalTasks();
+        displayUserManagementPlaceholder();
+        displayAllTasksPlaceholder();
+        lucide.createIcons(); // Kjøres for å rendere ikoner
+    };
+
+    initializePage();
 });

@@ -3,66 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="/images/Logo.png" type="image/x-icon">   
-    <title>Family group Admin Panel</title>
+    <title>Admin Panel</title>
+    <link rel="icon" href="/images/Logo.png" type="image/x-icon">
+    <link rel="stylesheet" href="/css/admin-panel.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <script src="/js/admin-panel.js" defer></script>
 </head>
 <body>
-    <!-- Midlertidlig -->
-    <h1>Admin Panel</h1>
+    <div class="admin-container">
+        <header>
+            <div class="header-left">
+                <i data-lucide="menu"></i>
+                <div class="join-code-container">
+                    <span>Room join-code</span>
+                    <strong id="join-code-display">LOADING...</strong>
+                </div>
+                <button class="icon-btn" id="refresh-join-code"><i data-lucide="refresh-cw"></i></button>
+                <button class="icon-btn" id="copy-join-code"><i data-lucide="copy"></i></button>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn"><i data-lucide="bell"></i></button>
+                <button class="icon-btn"><i data-lucide="user-circle-2"></i></button>
+                <a href="/dashboard.html" class="back-link">Back to Dashboard</a>
+            </div>
+        </header>
 
-     <div id="message-container"></div>
+        <main class="admin-grid">
+            <!-- User Management Card -->
+            <div class="card" id="user-management-card">
+                <div class="card-header">
+                    <h2>User management</h2>
+                    <i data-lucide="arrow-up-right"></i>
+                </div>
+                <div class="card-content">
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>Users</th>
+                                <th>Role</th>
+                                <th>Points this month</th>
+                                <th>Manage User</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-list">
+                            <!-- User rows will be populated here -->
+                        </tbody>
+                    </table>
+                    <template id="user-row-template">
+                        <tr>
+                            <td class="user-cell">
+                                <div class="avatar"></div>
+                                <span class="username">Username</span>
+                            </td>
+                            <td>
+                                <select class="role-select">
+                                    <option value="standard">Standard</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="owner">Owner</option>
+                                </select>
+                            </td>
+                            <td class="points-cell">0 Points</td>
+                            <td><button class="manage-btn">Edit <i data-lucide="arrow-up-right"></i></button></td>
+                        </tr>
+                    </template>
+                </div>
+            </div>
 
-     <!-- Området for å lage ny task-->
-    <h2>Create New Task</h2>
-    <form id="create-task-form">
-        <div>
-            <label for="task-title">Title:</label>
-            <input type="text" id="task-title" name="title" required maxlength="28">
-        </div>
-        <div>
-            <label for="task-description">Description:</label>
-            <textarea id="task-description" name="description"></textarea>
-        </div>
-        <div>
-            <label for="task-difficulty">Difficulty:</label>
-            <select id="task-difficulty" name="difficulty">
-                <option value="light">Light (5 Points)</option>
-                <option value="easy">Easy (10 Points)</option>
-                <option value="medium" selected>Medium (25 Points)</option>
-                <option value="hard">Hard (50 Points)</option>
-            </select>
-        </div>
-        <div>
-            <label for="task-assigned-to">Assign To:</label>
-            <select id="task-assigned-to" name="assigned_to">
-                <option value="">-- Unassigned --</option>
-                <!-- Family members will be populated here by JS -->
-            </select>
-        </div>
-        <div>
-            <label for="task-deadline">Deadline (Optional):</label>
-            <input type="datetime-local" id="task-deadline" name="deadline">
-        </div>
-        <button type="submit">Create Task</button>
-    </form>
-    <p id="task-form-message" style="display: none;"></p>
+            <!-- Task Management Card -->
+            <div class="card" id="task-management-card">
+                <div class="card-header">
+                    <h2>Task management</h2>
+                    <i data-lucide="arrow-up-right"></i>
+                </div>
+                <div class="card-content">
+                    <button class="create-new-task-btn">Create new <i data-lucide="plus"></i></button>
+                    <div class="task-table-container">
+                        <h4>All Family Tasks</h4>
+                        <ul id="all-tasks-list">
+                           <!-- All tasks will be loaded here -->
+                        </ul>
+                        <hr>
+                        <h4>Tasks Pending Approval</h4>
+                        <ul id="approval-tasks-list">
+                            <!-- Tasks awaiting approval will be loaded here -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
 
-    <hr>
+            <!-- Incoming Join Requests Card -->
+            <div class="card" id="join-requests-card">
+                <div class="card-header">
+                    <h2>Incoming join requests</h2>
+                </div>
+                <div class="card-content">
+                    <ul class="request-list" id="join-requests-list">
+                        <!-- Join requests will be loaded here -->
+                    </ul>
+                    <template id="join-request-template">
+                        <li class="request-item">
+                            <div class="avatar"></div>
+                            <div class="user-info">
+                                <span class="username"></span>
+                                <span class="email"></span>
+                            </div>
+                            <div class="request-details">
+                                <span class="timestamp"></span>
+                                <div class="actions">
+                                    <button class="accept-btn">Accept</button>
+                                    <button class="reject-btn">Reject</button>
+                                </div>
+                            </div>
+                        </li>
+                    </template>
+                </div>
+            </div>
 
-    <!-- Seksjon for å se tasks-->
-    <h2>Task List</h2>
-    <div id="task-list-container">
-        <p>Loading tasks...</p>
+             <!-- Family Statistics Card (Placeholder) -->
+             <div class="card" id="family-stats-card">
+                <div class="card-header">
+                    <h2>Family statistics</h2>
+                    <i data-lucide="arrow-up-right"></i>
+                </div>
+                <div class="card-content">
+                    <p>Tasks completed this week: <strong>17</strong></p>
+                    <p>Uncompleted tasks: <strong>4</strong></p>
+                    <p>Top contributor: <strong>DevUser 35 points</strong></p>
+                </div>
+            </div>
+        </main>
     </div>
-
-    <hr>
-
-    <div class="join-requests-container">
-        <h2>Incoming Join Requests</h2>
-        <div id="requests-list">
-            <!-- Join requests vil bli dynamisk satt inn her -->
-            <p>Loading requests...</p>
+    <script>
+        // Bibliotek for ikoner
+      lucide.createIcons();
+    </script>
+    <!-- En Modal for å opprette en ny oppgave -->
+    <div id="create-task-modal" class="modal-backdrop" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Task</h2>
+                <button id="close-modal-btn" class="icon-btn"><i data-lucide="x"></i></button>
+            </div>
+            <form id="create-task-form">
+                <div class="form-group">
+                    <label for="task-title">Task Title</label>
+                    <input type="text" id="task-title" placeholder="E.g., Wash the dishes" required>
+                </div>
+                <div class="form-group">
+                    <label for="task-description">Description (Optional)</label>
+                    <textarea id="task-description" placeholder="Add more details..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="task-difficulty">Difficulty / Points</label>
+                    <select id="task-difficulty">
+                        <option value="light">Light (5p)</option>
+                        <option value="easy">Easy (10p)</option>
+                        <option value="medium" selected>Medium (25p)</option>
+                        <option value="hard">Hard (50p)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-assign-to">Assign To (Optional)</label>
+                    <select id="task-assign-to">
+                        <option value="">No one (anyone can claim)</option>
+                        <!-- Family members will be loaded here by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-deadline">Deadline (Optional)</label>
+                    <input type="datetime-local" id="task-deadline">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="submit-btn">Create Task</button>
+                </div>
+            </form>
         </div>
     </div>
 </body>

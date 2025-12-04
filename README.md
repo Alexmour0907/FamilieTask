@@ -37,6 +37,16 @@ The project is in active development. Some key features have been implemented, p
 - **Frontend:** HTML, CSS, and Vanilla JavaScript utilizing the `fetch` API.
 - **Authentication:** Passwords are hashed using `bcrypt`, and sessions are managed with `express-session` and `session-file-store`.
 
+### Database Visual Diagram 🧭
+This diagram illustrates the relationships between the tables in the `FamilieTask_database.db` SQLite database.
+
+![Database Diagram](./docs/database-diagram.png)
+
+
+You can view and edit the diagram here: [DrawDB Link](https://www.drawdb.app/editor?shareId=4c93190b4986266e6fac4d060955f1f9)
+
+[See the rest of the DB docs here](#familietask-app-database-documentation) (or scroll down)
+
 ## ⚙️ How the Project Works 🛠️
 
 The application is built with a Node.js and Express backend, a SQLite database, and a frontend using HTML, CSS, and vanilla JavaScript.
@@ -252,19 +262,9 @@ The application also exposes API endpoints to provide data to the frontend dynam
 
 
 ---
- # FamilieTask App - Database Documentation 🗄️
+ ## FamilieTask app database documentation
 
 This part of the document describes the structure of the database used in the FamilieTask App. The database tables and columns below are aligned with the current SQLite schema.
-
----
-
-### Database Visual Diagram 🧭
-This diagram illustrates the relationships between the tables in the `FamilieTask_database.db` SQLite database.
-
-![Database Diagram](./docs/database-diagram.png)
-
-You can view and edit the diagram here: [DrawDB Link](https://www.drawdb.app/editor?shareId=4c93190b4986266e6fac4d060955f1f9)
-
 
 ---
 

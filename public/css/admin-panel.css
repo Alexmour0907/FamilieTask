@@ -1,0 +1,198 @@
+/* --- Variabler og Grunnleggende Stiler --- */
+:root {
+    --bg-main: #F9FAFB;
+    --bg-card: #FFFFFF;
+    --bg-header: #F9F5FF; /* Lighter purple from design */
+    --primary-purple: #7F56D9;
+    --text-dark: #101828;
+    --text-light: #667085;
+    --border-color: #EAECF0;
+    --success-green: #027A48;
+    --danger-red: #B42318;
+    --font-family: 'Inter', sans-serif;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-main);
+    color: var(--text-dark);
+    margin: 0;
+}
+
+/* --- Header --- */
+header {
+    background-color: var(--bg-header);
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.header-left, .header-right { display: flex; align-items: center; gap: 16px; }
+.join-code-container { display: flex; flex-direction: column; }
+.join-code-container span { font-size: 0.8rem; color: var(--text-light); }
+#join-code-display { font-size: 1.25rem; font-weight: 700; color: var(--text-dark); }
+.icon-btn { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-light); }
+.icon-btn:hover { color: var(--text-dark); }
+.back-link { display: none; } /* Hide for now */
+
+/* --- Hovedlayout --- */
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 24px;
+    padding: 24px;
+}
+
+/* --- Generell Kort-stil --- */
+.card {
+    background-color: var(--bg-card);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    border: 1px solid var(--border-color);
+}
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.card-header h2 { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.card-header i { color: var(--text-light); }
+
+/* --- User Management Table --- */
+.user-table { width: 100%; border-collapse: collapse; }
+.user-table th, .user-table td {
+    padding: 12px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.user-table th { font-size: 0.8rem; color: var(--text-light); font-weight: 500; }
+.user-cell { display: flex; align-items: center; gap: 12px; }
+.avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #EBE9FE; }
+.role-select { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-color); }
+.manage-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+/* --- Task Management Card --- */
+.create-new-task-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: none;
+    border: 1px dashed #D0D5DD;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+.task-table-container h4 { margin-top: 24px; margin-bottom: 12px; font-weight: 600; }
+#all-tasks-list, #approval-tasks-list { list-style: none; padding: 0; margin: 0; }
+hr { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
+
+/* --- Incoming Join Requests --- */
+.request-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; }
+.request-item { display: flex; align-items: center; gap: 16px; }
+.request-item .user-info { flex-grow: 1; }
+.request-details { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.actions { display: flex; gap: 8px; }
+.actions button { padding: 6px 12px; border-radius: 6px; border: 1px solid; cursor: pointer; font-weight: 600; }
+.accept-btn { background-color: #ECFDF3; border-color: #A6F4C5; color: #027A48; }
+.reject-btn { background-color: #FEF3F2; border-color: #FECDCA; color: #B42318; }
+
+/* --- Approval Item Styling --- */
+.approval-item {
+    display: flex;
+    flex-wrap: wrap; /* Lar elementene gå over til neste linje om nødvendig */
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    gap: 12px; /* Mellomrom mellom info og knapper */
+}
+
+.approval-item .task-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Tar opp tilgjengelig plass */
+}
+
+.approval-item .points-reward {
+    font-weight: 600;
+    color: var(--primary-purple);
+    margin-right: 16px;
+}
+
+/* --- Lucide Icons --- */
+.lucide { width: 20px; height: 20px; }
+.manage-btn .lucide { width: 14px; height: 14px; }
+
+/* --- MODAL STYLES --- */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(16, 24, 40, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--bg-card);
+    padding: 24px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+#create-task-form .form-group {
+    margin-bottom: 16px;
+}
+
+#create-task-form label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 6px;
+    font-size: 0.875rem;
+}
+
+#create-task-form input,
+#create-task-form textarea,
+#create-task-form select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #D0D5DD;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    box-sizing: border-box; /* Sørger for at padding ikke øker bredden */
+}
+
+.modal-footer {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.modal-footer .submit-btn {
+    background-color: var(--primary-purple);
+    color: white;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+}
