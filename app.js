@@ -498,7 +498,8 @@ const getUserRoleInFamily = (userId, familyId) => {
 
 // Lage en ny task
 app.post('/api/tasks', requireLogin, (req, res) => {
-    const { title, description, difficulty, assigned_to, deadline } = req.body;
+    const { title, description, difficulty, deadline } = req.body;
+    let assigned_to = req.body.assigned_to; // Keep original value for now
     const userId = req.session.user.id;
 
     // Validering av input
@@ -530,39 +531,53 @@ app.post('/api/tasks', requireLogin, (req, res) => {
         return res.status(403).json({ message: 'You do not have permission to create tasks.' });
     }
 
-    // Bruk en transaksjon for å sikre at både task og tildeling blir opprettet
-    const createTaskTransaction = db.transaction(() => {
-        // Opprett selve oppgaven
-        const insertTaskSql = `
-            INSERT INTO Tasks (family_id, title, description, difficulty, points_reward, created_by, deadline)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `;
-        const taskInfo = db.prepare(insertTaskSql).run(
-            familyId,
-            title.trim(),
-            description || null,
-            taskDifficulty,
-            points_reward,
-            userId,
-            deadline || null
-        );
-        const newTaskId = taskInfo.lastInsertRowid;
-
-        // 2. Opprett en tildeling i AssignedTasks
-        const assignmentStatus = assigned_to ? 'pending' : 'not_assigned';
-        const insertAssignmentSql = `
-            INSERT INTO AssignedTasks (task_id, user_id, status)
-            VALUES (?, ?, ?)
-        `;
-        db.prepare(insertAssignmentSql).run(newTaskId, assigned_to || null, assignmentStatus);
-
-        return newTaskId;
-    });
-
     try {
+        // Check for a valid, non-empty assigned_to value
+        const isUserAssigned = assigned_to && assigned_to !== '';
+        
+        if (isUserAssigned) {
+            const assignedToId = parseInt(assigned_to, 10);
+            if (isNaN(assignedToId)) {
+                 return res.status(400).json({ message: 'Invalid assigned user ID.' });
+            }
+
+            const memberCheckSql = 'SELECT 1 FROM FamilyMembers WHERE family_id = ? AND user_id = ?';
+            const member = db.prepare(memberCheckSql).get(familyId, assignedToId);
+            if (!member) {
+                return res.status(400).json({ message: 'The assigned user is not a member of your family.' });
+            }
+        }
+
+        const createTaskTransaction = db.transaction(() => {
+            const insertTaskSql = `
+                INSERT INTO Tasks (family_id, title, description, difficulty, points_reward, created_by, deadline)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `;
+            const taskInfo = db.prepare(insertTaskSql).run(
+                familyId,
+                title.trim(),
+                description || null,
+                taskDifficulty,
+                points_reward,
+                userId,
+                deadline || null
+            );
+            const newTaskId = taskInfo.lastInsertRowid;
+
+            const assignmentStatus = isUserAssigned ? 'pending' : 'not_assigned';
+            const finalAssignedId = isUserAssigned ? parseInt(assigned_to, 10) : null;
+
+            const insertAssignmentSql = `
+                INSERT INTO AssignedTasks (task_id, user_id, status)
+                VALUES (?, ?, ?)
+            `;
+            db.prepare(insertAssignmentSql).run(newTaskId, finalAssignedId, assignmentStatus);
+
+            return newTaskId;
+        });
+
         const newTaskId = createTaskTransaction();
         
-        // Hent den nylig opprettede oppgaven for å sende tilbake i responsen
         const getNewTaskSql = `
             SELECT t.*, at.status as assignment_status, u.username as assignee_username
             FROM Tasks t

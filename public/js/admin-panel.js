@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createTaskForm = document.getElementById('create-task-form');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const createNewTaskBtn = document.querySelector('.create-new-task-btn');
+    const assignedToSelect = document.getElementById('task-assign-to');
 
     // --- Funksjoner for datainnhenting og rendering ---
 
@@ -108,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             members.forEach(member => {
                 const option = document.createElement('option');
-                option.value = member.user_id;
+                option.value = member.id;
                 option.textContent = member.username;
                 assignToSelect.appendChild(option);
             });
