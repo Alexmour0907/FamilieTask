@@ -363,6 +363,17 @@ Tracks requests from users to join a family (used for approval flows).
 
 ---
 
+## 💯 Points table
+
+Tracks requests from users to join a family (used for approval flows).
+
+| Column      | Type    | Description                                              |
+|-------------|---------|----------------------------------------------------------|
+| user_id          | INTEGER | PK, FK References `Users(id)` autoincrement                               |
+| family_id   | INTEGER | PK, FK References `Families(id)`                                |
+| points    | INTEGER | References `Users(id)`
+
+
 ## 🔗 Relationships
 
 The database schema is designed with the following relationships, enforced by foreign keys:
@@ -387,6 +398,12 @@ The database schema is designed with the following relationships, enforced by fo
   - `JoinRequests.user_id` references `Users.id`.
   - `JoinRequests.family_id` references `Families.id`.
   - This table manages pending requests from users who want to join a family.
+
+  - **`Points` -> `Users` & `Families`**:
+  - `Points.user_id` references `Users.id`.
+  - `Points.family_id` references `Families.id`.
+  - This table manages points a user has in each uniqe family.
+  
 ---
 
 
