@@ -37,12 +37,12 @@ app.use(express.json());
 function cleanupExpiredJoinRequests() {
     const sql = `
         DELETE FROM JoinRequests 
-        WHERE (status = 'pending' OR status = 'rejected') AND expires_at < DATETIME('now')
+        WHERE expires_at < DATETIME('now')
     `;
     try {
         const info = db.prepare(sql).run();
         if (info.changes > 0) {
-            console.log(`[Cron Job] Cleaned up ${info.changes} expired or rejected join requests.`);
+            console.log(`[Cron Job] Cleaned up ${info.changes} expired join requests.`);
         }
     } catch (error) {
         console.error('[Cron Job] Error cleaning up expired join requests:', error);
